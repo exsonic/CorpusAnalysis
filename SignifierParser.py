@@ -71,7 +71,7 @@ class SignifierParser(object):
 			searchName = engager['lastName']
 			if engager['lastName'] == 'Jones':
 				searchName = engager['fullName']
-			for sentence in self.db.getAllSentenceWithString(searchName):
+			for sentence in self.db.getAllSentenceWithWord(searchName):
 				#id 91 92 are analyst
 				self.db.updateSentenceEngager(sentence['id'], engager['id'])
 
@@ -79,15 +79,15 @@ class SignifierParser(object):
 		for i, company in enumerate(self.db.getAllCompany()):
 			print(i)
 			upperCaseName, normalName = company['shortName'], company['shortName'].title()
-			for sententce in self.db.getAllSentenceWithString(upperCaseName):
+			for sententce in self.db.getAllSentenceWithWord(upperCaseName):
 				self.db.updateSentenceCompany(sentence['id'], company['id'])
-			for sentence in self.db.getAllSentenceWithString(normalName):
+			for sentence in self.db.getAllSentenceWithWord(normalName):
 				self.db.updateSentenceCompany(sentence['id'], company['id'])
 
 	def parseCiteWord(self):
 		for i, word in enumerate(getWordList(CITE_WORD)):
 			print(i)
-			for sentence in self.db.getAllSentenceWithString(word):
+			for sentence in self.db.getAllSentenceWithWord(word):
 				self.db.updateSentenceCiteWord(sentence['id'], word)
 
 

@@ -62,8 +62,9 @@ class DBController(object):
 	def getAllCompany(self):
 		return self.db.company.find(timeout=False)
 
-	def getAllSentenceWithString(self, string):
-		return self.db.sentence.find({'content' : {'$regex' : string}}, timeout=False)
+	def getAllSentenceWithWord(self, word):
+		word = ' ' + word + ' '
+		return self.db.sentence.find({'content' : {'$regex' : word}}, timeout=False)
 
 	def getAllPfmNegAtrbSentenceWithString(self, string):
 		return self.db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
