@@ -97,4 +97,3 @@ if __name__ == '__main__':
 	# sp.parseEngager()
 	# sp.parseCompany()
 	sp.parseCiteWord()
-	#export
