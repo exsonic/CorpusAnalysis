@@ -1,0 +1,7 @@
+shareholder
+management
+operation
+accounting
+strategy
+asset
+investment
