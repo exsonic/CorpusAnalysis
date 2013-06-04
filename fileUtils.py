@@ -157,6 +157,7 @@ def loadEngagerAndCompanyToDB(filePath):
 			CEOList.append(line[-1])
 			companyList.append(line[-2])
 		#add analyst to engager
+		CEOList.extend(['CEO', 'Chief Executive Officer', 'Executive', 'leadership', 'management'])
 		CEOList = list(set(CEOList))
 		companyList = list(set(companyList))
 		analystList = ['analyst', 'Analyst']
@@ -169,4 +170,4 @@ def loadEngagerAndCompanyToDB(filePath):
 
 if __name__ == '__main__':
 	pass
-	# loadCEOAndCompanyFromFile('corpus/CEO.csv')
+	# loadEngagerAndCompanyToDB('corpus/CEO.csv')

@@ -11,7 +11,7 @@ class DBController(object):
 	def __init__(self):
 		try:
 			self.client = MongoClient()
-			self.db = self.client.TextAnalysis
+			self.db = self.client.CorpusAnalysis
 		except Exception as e:
 			print e
 			exit()
@@ -181,7 +181,7 @@ class DBController(object):
 	def insertEngager(self, nameList, engagerType):
 		for name in nameList:
 			nameParts = name.split()
-			if len(nameParts) >= 3:
+			if len(nameParts) >= 3 and nameParts[0] != 'Chief':
 				firstName, lastName = nameParts[0], nameParts[2]
 			else:
 				firstName, lastName = nameParts[0], nameParts[-1]
