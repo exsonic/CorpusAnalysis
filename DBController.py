@@ -23,36 +23,36 @@ class DBController(object):
 		self.db.article.insert(articleDict)
 
 	def insertSentence(self, sentenceDict):
-		newId = self.db.sentence.count() + 1
+		newId = self.db.sentence.count()
 		sentenceDict['id'] = newId
 		self.db.sentence.insert(sentenceDict)
 
-	def getAllSentenceIter(self, limit=0):
+	def getAllSentence(self, limit=0):
 		return self.db.sentence.find(timeout=False).limit(limit)
 
-	def getAllArticleIter(self):
+	def getAllArticle(self):
 		return self.db.article.find(timeout=False)
 
 	def getALLArticleIdWithPfm(self):
 		articleIdList = [sentence['articleId'] for sentence in self.db.sentence.find()]
 		return set(articleIdList)
 
-	def getAllPfmNegSentenceIterWithAtrb(self):
+	def getAllPfmSentenceWithAtrb(self):
 		return self.db.sentence.find({'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, timeout=False)
 
-	def getAllSentenceIterWithoutAtrb(self):
+	def getAllSentenceWithoutAtrb(self):
 		return self.db.sentence.find({'$and' : [{'ex' : {'$exists' : False}}, {'in' : {'$exists' : False}}]}, timeout=False)
 
-	def getAllAnnotatedSentenceIterWithType(self, atrbType):
+	def getAllAnnotatedSentenceWithType(self, atrbType):
 		return self.db.AnnotatedSentence.find({'atrb' : atrbType}, timeout=False)
 
-	def getAllPfmNegSentenceIter(self):
+	def getAllPfmNegSentence(self):
 		return self.db.sentence.find({'neg' : {'$exists' : True, '$ne' : []}}, timeout=False)
 
-	def getAllSentenceIterWithArticleId(self, articleId):
+	def getAllSentenceWithArticleId(self, articleId):
 		return self.db.sentence.find({'articleId' : articleId}, timeout=False)
 
-	def getAllSentenceIterForOneType(self, wordType, limit=0):
+	def getAllSentenceForOneType(self, wordType, limit=0):
 		key = getKeyFromWordType(wordType)
 		return self.db.sentence.find({key : {'$exists' : True, '$ne' : []}}, timeout=False).limit(limit)
 
@@ -63,7 +63,7 @@ class DBController(object):
 		return self.db.company.find(timeout=False)
 
 	def getAllSentenceWithWord(self, word):
-		word = ' ' + word + ' '
+		word = wrapWord(word)
 		return self.db.sentence.find({'content' : {'$regex' : word}}, timeout=False)
 
 	def getAllPfmNegAtrbSentenceWithString(self, string):
@@ -109,7 +109,7 @@ class DBController(object):
 		self.db.article.update({'id' : articleId}, {'$set' : {'pfmSentenceCount' : count, 'pfmRelated' : isPfmRelated}})
 
 	def countPfmSentenceInArticle(self):
-		articles = self.db.getAllArticleIter()
+		articles = self.db.getAllArticle()
 		for article in articles:
 			count = self.db.getPfmSentenceCount(article['id'])
 			self.db.updateArticlePfmSentenceCount(article['id'], count)
@@ -117,20 +117,20 @@ class DBController(object):
 	def updateSentenceCluster(self, sentenceId, clusterNum):
 		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'clusterSentence' : clusterNum}})
 
-	def getSentenceIterInCluster(self, clusterSentence):
+	def getSentenceInCluster(self, clusterSentence):
 		return self.db.sentence.find({'clusterSentence': {'$exists' : True, '$all' : [clusterSentence]}})
 
 	def getSentenceCount(self):
 		return self.db.sentence.count()
 
-	def getSentenceIterInRange(self, startId, endId):
+	def getSentenceInRange(self, startId, endId):
 		if startId < 1 or endId > self.getSentenceCount():
 			raise Exception('invalid sentence id range')
 		return self.db.sentence.find({'id' : {'$gte' : startId, '$lte' : endId}})
 
 	def buildUnigramTable(self):
 		table, count = {}, 0
-		sentences = self.getAllSentenceIter()
+		sentences = self.getAllSentence()
 		for sentence in sentences:
 			words = getProcessedWordList(sentence)
 			for word in words:
@@ -168,31 +168,31 @@ class DBController(object):
 
 	def getParsedArticleIdDict(self):
 		articleIdDitc = {}
-		sentences = self.getAllSentenceIter()
+		sentences = self.getAllSentence()
 		for sentence in sentences:
 			articleId = sentence['articleId']
 			if articleId not in articleIdDitc:
 				articleIdDitc[articleId] = True
 		return articleIdDitc
 
-	def getSentenceDate(self, articleId):
-		return self.db.article.find_one({'id' : articleId})['date']
+	def insertEngager(self, engagerDict):
+		newId = self.db.engager.count()
+		engagerDict['id'] = newId
+		self.db.engager.insert(engagerDict)
 
-	def insertEngager(self, nameList, engagerType):
-		for name in nameList:
-			nameParts = name.split()
-			if len(nameParts) >= 3 and nameParts[0] != 'Chief':
-				firstName, lastName = nameParts[0], nameParts[2]
-			else:
-				firstName, lastName = nameParts[0], nameParts[-1]
-			newId = self.db.engager.count()
-			self.db.engager.insert({'id': newId, 'fullName' : name, 'firstName': firstName, 'lastName': lastName, 'type' : engagerType})
-
-	def insertCompany(self, nameList):
-		for name in nameList:
-			newId = self.db.company.count()
-			shortName = cleanCompanyName(name)
-			self.db.company.insert({'id' : newId, 'shortName' : shortName, 'fullName' : name})
+	def insertCompany(self, companyDict):
+		newId = self.db.company.count()
+		companyDict['id'] = newId
+		self.db.company.insert(companyDict)
 
 	def getEngagerById(self, engagerId):
 		return self.db.engager.find_one({'id' : engagerId})
+
+	def updateSentencePfm(self, sentenceId, pfmWordList, posWordList, negWordList):
+		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'pfm' : pfmWordList, 'pos' : posWordList, 'neg' : negWordList}})
+
+	def getEngagerIdListByType(self, engagerType):
+		idList = []
+		for engager in self.db.engager.find({'type' : engagerType}):
+			idList.append(engager['id'])
+		return idList

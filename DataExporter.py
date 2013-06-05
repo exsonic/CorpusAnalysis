@@ -32,7 +32,7 @@ class DataExporter(object):
 			for keyValue in keyValueList:
 				key = getKeyFromWordType(keyValue)
 				lineList = [key]
-				sentences = self.db.getAllSentenceIterForOneType(keyValue)
+				sentences = self.db.getAllSentenceForOneType(keyValue)
 				sentenceList = getProcessedSentenceList(sentences)
 				transformer = CountVectorizer()
 				wordCountArray = transformer.fit_transform(sentenceList).toarray()
@@ -42,34 +42,39 @@ class DataExporter(object):
 				lineList.extend(frequentWordList)
 				writer.writerow(lineList)
 
+	#sentence collection is all the sentence
 	def exportSentenceAnalysis(self):
-		#from pfm*neg*atrb
-		sentences = self.db.getAllPfmNegSentenceIterWithAtrb()
 		with open('export/sentence.csv', 'wb') as f:
 			writer = csv.writer(f)
-			atrbWordList = getAtrbWordList()
-			attributeList = ['id', 'accessionNo', 'content', 'year', 'wordCount', 'in', 'ex', 'pfm',
-			                 'neg', 'CEO', 'analyst', 'company', 'cite'] + atrbWordList
+			sentences = self.db.getAllSentence()
+			analystIdList = self.db.getEngagerIdListByType(ENGAGER_ANALYST)
+			atrbWordList, citeWordList, articleDict = getAtrbWordList(), getWordList(CITE_WORD), {}
+			attributeList = ['case', 'id', 'accessionNo', 'content', 'year', 'wordCount', 'pfm', 'pos', 'neg', 'in', 'ex',
+			                'CEO', 'analyst', 'company', 'cite'] + citeWordList + atrbWordList
 			writer.writerow(attributeList)
 			for i, sentence in enumerate(sentences):
 				print(i)
-				atrbWordDict = getAtrbWordDict()
-				CEOCount, analystCount, year = 0, 0, self.db.getSentenceDate(sentence['articleId']).year
+				if sentence['articleId'] not in articleDict:
+					articleDict[sentence['articleId']] = self.db.getArticleById(sentence['articleId'])
+				atrbWordDict, citeWordDict = getAtrbWordDict(), getWordDict(CITE_WORD)
+				CEOCount, analystCount, year, case = 0, 0, articleDict[sentence['articleId']]['date'].year, articleDict[sentence['articleId']]['companyFolder']
 				companyCount = len(sentence['company']) if 'company' in sentence else 0
-				if 'engager' in sentence:
-					for engagerId in sentence['engager']:
-						if self.db.getEngagerById(engagerId)['type'] == ENGAGER_CEO:
-							CEOCount += 1
-						else:
-							analystCount += 1
-				citeCount = len(sentence[getKeyFromWordType(CITE_WORD)]) if getKeyFromWordType(CITE_WORD) in sentence else 0
-
-				for word in sentence[getKeyFromWordType(ATRB_EX)]:
+				for engagerId in sentence['engager']:
+					if engagerId in analystIdList:
+						analystCount += 1
+					else:
+						CEOCount += 1
+				citeCount = len(sentence['cite'])
+				for word in sentence['cite']:
+					citeWordDict[word] += 1
+				for word in sentence['in']:
 					atrbWordDict[word] += 1
-				for word in sentence[getKeyFromWordType(ATRB_IN)]:
+				for word in sentence['ex']:
 					atrbWordDict[word] += 1
-				lineList = [sentence['id'], sentence['articleId'], sentence['content'].encode(ENCODE_UTF8), year, getStringWordCount(sentence['content']),
-				            len(sentence['in']), len(sentence['ex']), len(sentence['pfm']), len(sentence['neg']), CEOCount, analystCount, companyCount, citeCount]
+				lineList = [case, sentence['id'], sentence['articleId'], sentence['content'].encode(ENCODE_UTF8), year, getStringWordCount(sentence['content']),
+				            len(sentence['pfm']), len(sentence['pos']), len(sentence['neg']), len(sentence['in']), len(sentence['ex']), CEOCount, analystCount, companyCount, citeCount]
+				for word in citeWordList:
+					lineList.append(citeWordDict[word])
 				for word in atrbWordList:
 					lineList.append(atrbWordDict[word])
 				writer.writerow(lineList)
@@ -95,7 +100,7 @@ class DataExporter(object):
 		with open('export/' + fileName, 'wb') as f:
 			writer = csv.writer(f)
 			writer.writerow(attributeList)
-			sentences = self.db.getAllSentenceIter()
+			sentences = self.db.getAllSentence()
 			for sentence in sentences:
 				if sentence[key]:
 					lineList = [sentence['id'], sentence['articleId'], sentence['paragraph'], sentence['content'],
@@ -149,7 +154,7 @@ class ExportArticleWordThread(Thread):
 
 	def run(self):
 		lineList = [self.articleId]
-		sentences = self.db.getAllSentenceIterWithArticleId(self.articleId)
+		sentences = self.db.getAllSentenceWithArticleId(self.articleId)
 		pfmWordDict, posWordDict, negWordDict = getWordDictWithWordList(self.pfmWordList), getWordDictWithWordList(
 			self.posWordList), getWordDictWithWordList(self.negWordList)
 		pfmSentenceWordList, posSentenceWordList, negSentenceWordList = [], [], []

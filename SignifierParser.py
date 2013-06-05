@@ -4,11 +4,12 @@ Created on 2013-5-9
 """
 
 from nltk.tokenize import sent_tokenize
-from textUtils import getWordList, getLemmatizer, getProcessedWordList, isPfmString
+from textUtils import getWordList, getLemmatizer, getProcessedWordList, isValidSentence, wrapWord
 from DBController import DBController
 from setting import *
 
 class SignifierParser(object):
+
 	def __init__(self):
 		self.db = DBController()
 		self.lemmatizer = getLemmatizer()
@@ -18,10 +19,12 @@ class SignifierParser(object):
 		self.exWord = getWordList(ATRB_EX)
 		self.inWord = getWordList(ATRB_IN)
 
-	def parseAllPfmSentence(self):
-		articles = self.db.getAllArticleIter()
+	#get all sentence by engager and company
+	def parseSentenceToDB(self):
+		articles = self.db.getAllArticle()
 		parsedArticleIdDict = self.db.getParsedArticleIdDict()
-		for article in articles:
+		for i, article in enumerate(articles):
+			print(i)
 			if article['id'] in parsedArticleIdDict:
 				continue
 			else:
@@ -31,69 +34,68 @@ class SignifierParser(object):
 					paragraph = article[key]
 					sentenceList = sent_tokenize(paragraph)
 					for sentence in sentenceList:
-						sentenceDict = self.parsePfmSentence(sentence)
+						sentenceDict = self.parseEngagerCompanySentence(sentence)
 						if sentenceDict is not None:
 							sentenceDict['articleId'] = article['id']
 							sentenceDict['paragraph'] = key
 							self.db.insertSentence(sentenceDict)
 
-	def parsePfmSentence(self, string):
-		if not isPfmString(string):
+	def parseEngagerCompanySentence(self, string):
+		if not isValidSentence(string):
 			return None
-		words = getProcessedWordList(string)
-		pfmWordList = filter(lambda word : word in self.pfmWord, words)
-		if not pfmWordList:
+		engagerIdList, companyIdList, engagers, companys = [], [], self.db.getAllEngager(), self.db.getAllCompany()
+		for engager in engagers:
+			if engager['lastName'] == 'Jones' or engager['lastName'] == 'Johnson' or engager['lastName'] == 'West' or engager['lastName'] == 'Post' or engager['lastName'] == 'Ford':
+				searchName = wrapWord(engager['fullName'])
+			else:
+				searchName = wrapWord(engager['lastName'])
+			if string.find(searchName) != -1:
+				engagerIdList.append(engager['id'])
+		for company in companys:
+			upperCaseName, normalName = wrapWord(company['shortName']), wrapWord(company['shortName'].title())
+			if string.find(upperCaseName) != -1:
+				companyIdList.append(company['id'])
+			elif string.find(normalName) != -1:
+				companyIdList.append(company['id'])
+		if not engagerIdList and not companyIdList:
 			return None
 		else:
-			posWordList = filter(lambda word : word in self.posWord, words)
-			negWordList = filter(lambda word : word in self.negWord, words)
-			if not posWordList and not negWordList:
-				return None
-			else:
-				sentenceDict = {'pfm' : pfmWordList, 'pos' : posWordList, 'neg' : negWordList, 'content' : string.encode(ENCODE_UTF8)}
-				return sentenceDict
+			#remove duplication
+			engagerIdList, companyIdList = list(set(engagerIdList)), list(set(companyIdList))
+			sentenceDict = {'content' : string.encode(ENCODE_UTF8), 'engager' : engagerIdList, 'company' : companyIdList}
+			return sentenceDict
 
-	def parseAllSentenceAtrb(self):
-		sentences = self.db.getAllSentenceIterWithoutAtrb()
+	def parseAllSentencePfm(self):
+		#list them all, becaue if loop with cursor and update cursor pointed sentence at meantime, the cursor will be screwed.
+		sentences = list(self.db.getAllSentence())
 		for i, sentence in enumerate(sentences):
 			print(i)
-			self.parseSentenceAtrb(sentence)
+			words = getProcessedWordList(sentence['content'])
+			pfmWordList = filter(lambda word : word in self.pfmWord, words)
+			posWordList = filter(lambda word : word in self.posWord, words)
+			negWordList = filter(lambda word : word in self.negWord, words)
+			self.db.updateSentencePfm(sentence['id'], pfmWordList, posWordList, negWordList)
 
-	def parseSentenceAtrb(self, sentence):
-		words = getProcessedWordList(sentence['content'])
-		exWordList = filter(lambda word : word in self.exWord, words)
-		inWordList = filter(lambda word : word in self.inWord, words)
-		self.db.updateSentenceAtrb(sentence['id'], exWordList, inWordList)
-
-	def parseEngager(self):
-		for i, engager in enumerate(self.db.getAllEngager()):
+	def parseAllSentenceAtrb(self):
+		sentences = self.db.getAllSentence()
+		for i, sentence in enumerate(sentences):
 			print(i)
-			searchName = engager['lastName']
-			if engager['lastName'] == 'Jones':
-				searchName = engager['fullName']
-			for sentence in self.db.getAllSentenceWithWord(searchName):
-				#id 91 92 are analyst
-				self.db.updateSentenceEngager(sentence['id'], engager['id'])
+			words = getProcessedWordList(sentence['content'])
+			exWordList = filter(lambda word : word in self.exWord, words)
+			inWordList = filter(lambda word : word in self.inWord, words)
+			self.db.updateSentenceAtrb(sentence['id'], exWordList, inWordList)
 
-	def parseCompany(self):
-		for i, company in enumerate(self.db.getAllCompany()):
-			print(i)
-			upperCaseName, normalName = company['shortName'], company['shortName'].title()
-			for sententce in self.db.getAllSentenceWithWord(upperCaseName):
-				self.db.updateSentenceCompany(sentence['id'], company['id'])
-			for sentence in self.db.getAllSentenceWithWord(normalName):
-				self.db.updateSentenceCompany(sentence['id'], company['id'])
-
-	def parseCiteWord(self):
+	def parseAllSentenceCitation(self):
 		for i, word in enumerate(getWordList(CITE_WORD)):
 			print(i)
 			for sentence in self.db.getAllSentenceWithWord(word):
 				self.db.updateSentenceCiteWord(sentence['id'], word)
 
-
 if __name__ == '__main__':
 	sp = SignifierParser()
+	# sp.parseSentenceToDB()
+	sp.parseAllSentencePfm()
 	# sp.parseAllSentenceAtrb()
-	# sp.parseEngager()
-	# sp.parseCompany()
-	# sp.parseCiteWord()
+	# sp.parseAllSentenceCitation()
+
+	#BACKUP AND REWRITE OUTPUT!!!

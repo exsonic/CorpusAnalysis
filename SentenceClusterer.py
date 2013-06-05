@@ -1,7 +1,7 @@
-'''
+"""
 Created on 2013-5-18
 @author: Bobi Pu, bobi.pu@usc.edu
-'''
+"""
 
 from DBController import DBController
 from sklearn.cluster import KMeans
@@ -27,7 +27,7 @@ class SentenceClusterer(object):
     def clusterSentenceInBatch(self, startId=0, limit=5000):
         endId, lastId = startId + BATCH_SIZE, startId + limit
         while endId < lastId:
-            sentences = self.db.getSentenceIterInRange(startId, endId)
+            sentences = self.db.getSentenceInRange(startId, endId)
             self.clusterSentence(sentences)
             startId += BATCH_SIZE
             endId += BATCH_SIZE
@@ -60,6 +60,6 @@ class SentenceClusterer(object):
         return vector
     
 
-if __name__ == '__main__':
-    sc = SentenceClusterer()
-    sc.clusterSentenceInBatch(30000, 1000)
+# if __name__ == '__main__':
+#     sc = SentenceClusterer()
+#     sc.clusterSentenceInBatch(30000, 1000)

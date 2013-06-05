@@ -120,6 +120,12 @@ def getTagText(article, tagName):
 	tag = article.find(tagName)
 	return tag.text if tag is not None else ''
 
+def getArticleFilePath(articleDict):
+	if articleDict['subFolder'] is not None:
+		return articleDict['companyFolder'] + '/' + articleDict['subFolder']
+	else:
+		return articleDict['companyFolder']
+
 def loadAtrbSentenceToDB(inputDir):
 	db = DBController()
 	for dirName, _, fileNames in os.walk(inputDir):
@@ -161,13 +167,34 @@ def loadEngagerAndCompanyToDB(filePath):
 		CEOList = list(set(CEOList))
 		companyList = list(set(companyList))
 		analystList = ['analyst', 'Analyst']
+		companySuffixList = ['CP', 'CORP', 'INC', 'GRP', 'LLC', 'CO', 'LABS', 'HOLDING', 'BANK', 'TIRE', 'PHARM', 'ENERGY', 'SYSTEM', 'MICROSYSTEMS', 'COMPAN']
 		db = DBController()
-		db.insertEngager(CEOList, ENGAGER_CEO)
-		db.insertEngager(analystList, ENGAGER_ANALYST)
-		db.insertCompany(companyList)
+		for name in CEOList:
+			nameParts = name.split()
+			if name == 'CEO Name':
+				continue
+			elif name == 'Chief Executive Officer':
+				firstName, lastName = name, name
+			elif len(nameParts) >= 3:
+				firstName, lastName = nameParts[0], nameParts[2]
+			else:
+				firstName, lastName = nameParts[0], nameParts[-1]
+			CEODict = {'fullName' : name, 'firstName': firstName, 'lastName': lastName, 'type' : ENGAGER_CEO}
+			db.insertEngager(CEODict)
+		for name in analystList:
+			analystDict = {'fullName' : name, 'firstName': name, 'lastName': name, 'type' : ENGAGER_ANALYST}
+			db.insertEngager(analystDict)
+		for name in companyList:
+			name, shortName = name.upper(), name.upper()
+			for suffix in companySuffixList:
+				if len(name.split()) > 1 and name.endswith(suffix):
+					shortName = ' '.join(name.split()[0 : -1])
+				elif name.find(',') != -1:
+					shortName = name.split(',')[0]
+			companyDict = {'shortName' : shortName, 'fullName' : name}
+			db.insertCompany(companyDict)
 
 
 
-if __name__ == '__main__':
-	pass
-	# loadEngagerAndCompanyToDB('corpus/CEO.csv')
+# if __name__ == '__main__':
+# 	loadEngagerAndCompanyToDB('corpus/CEO.csv')

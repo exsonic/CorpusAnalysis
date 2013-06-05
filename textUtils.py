@@ -10,10 +10,8 @@ from math import log10
 from collections import Counter
 from copy import deepcopy
 
-def isPfmString(string):
-		if string.find('said') != -1:
-			return True
-		elif string.find('=') != -1:
+def isValidSentence(string):
+		if string.find('=') != -1:
 			return False
 		elif getStringWordCount(string) > PFM_SENTENCE_WORD_COUNT_HIGH_LIMIT or getStringWordCount(string) < PFM_SENTENCE_WORD_COUNT_LOW_LIMIT:
 			return False
@@ -163,12 +161,5 @@ def getAtrbWordDict():
 	atrbWordList = getAtrbWordList()
 	return dict(zip(atrbWordList, [0] * len(atrbWordList)))
 
-def cleanCompanyName(name):
-		name = name.upper()
-		if len(name.split()) == 1:
-			return name
-		suffixList = ['CP', 'CORP', 'INC', 'GRP', 'LLC', 'CO']
-		for suffix in suffixList:
-			if name.endswith(suffix):
-				return ' '.join(name.split()[0 : -1])
-		return name
+def wrapWord(string):
+	return ' ' + string.strip() + ' '
