@@ -4,7 +4,7 @@ Created on 2013-5-9
 """
 
 from nltk.tokenize import sent_tokenize
-from textUtils import getWordList, getLemmatizer, getProcessedWordList, isValidSentence, wrapWord
+from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord
 from DBController import DBController
 from setting import *
 
@@ -12,12 +12,12 @@ class SignifierParser(object):
 
 	def __init__(self):
 		self.db = DBController()
-		self.lemmatizer = getLemmatizer()
 		self.pfmWord = getWordList(WORD_PFM)
 		self.posWord = getWordList(WORD_POS)
 		self.negWord = getWordList(WORD_NEG)
 		self.exWord = getWordList(ATRB_EX)
 		self.inWord = getWordList(ATRB_IN)
+		self.citeWord = getWordList(CITE_WORD)
 
 	#get all sentence by engager and company
 	def parseSentenceToDB(self):
@@ -70,26 +70,29 @@ class SignifierParser(object):
 		sentences = list(self.db.getAllSentence())
 		for i, sentence in enumerate(sentences):
 			print(i)
-			words = getProcessedWordList(sentence['content'])
+			words = getProcessedWordList(sentence['content'], WORD_PFM)
 			pfmWordList = filter(lambda word : word in self.pfmWord, words)
+			words = getProcessedWordList(sentence['content'], WORD_POS)
 			posWordList = filter(lambda word : word in self.posWord, words)
 			negWordList = filter(lambda word : word in self.negWord, words)
 			self.db.updateSentencePfm(sentence['id'], pfmWordList, posWordList, negWordList)
 
 	def parseAllSentenceAtrb(self):
-		sentences = self.db.getAllSentence()
+		sentences = list(self.db.getAllSentence())
 		for i, sentence in enumerate(sentences):
 			print(i)
-			words = getProcessedWordList(sentence['content'])
+			words = getProcessedWordList(sentence['content'], ATRB_EX)
 			exWordList = filter(lambda word : word in self.exWord, words)
 			inWordList = filter(lambda word : word in self.inWord, words)
 			self.db.updateSentenceAtrb(sentence['id'], exWordList, inWordList)
 
 	def parseAllSentenceCitation(self):
-		for i, word in enumerate(getWordList(CITE_WORD)):
+		sentences = list(self.db.getAllSentence())
+		for i, sentence in enumerate(sentences):
 			print(i)
-			for sentence in self.db.getAllSentenceWithWord(word):
-				self.db.updateSentenceCiteWord(sentence['id'], word)
+			words = getProcessedWordList(sentence['content'], CITE_WORD)
+			citeWordList = filter(lambda  word : word in self.citeWord, words)
+			self.db.updateSentenceCiteWord(sentence['id'], citeWordList)
 
 if __name__ == '__main__':
 	sp = SignifierParser()

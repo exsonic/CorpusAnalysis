@@ -111,15 +111,24 @@ def getLemmatizer():
 	else:
 		return lemmatizer
 
-def getProcessedWordList(string):
+def getProcessedWordList(string, wordType=WORD_PFM):
 	wordList = []
-	lemmatizer, filterWordDict = getLemmatizer(), getWordDict(FILTER_WORD)
+	lemmatizer = getLemmatizer()
+	filterWordDict = getWordDict(FILTER_WORD)
 	for word in word_tokenize(string):
-		word = lemmatizer.lemmatize(word.strip().lower())
+		word = lemmatizeWord(lemmatizer, word, wordType)
 		if word.isalpha() and word not in filterWordDict and len(word) > 1:
-			word = lemmatizer.lemmatize(word)
 			wordList.append(word)
 	return wordList
+
+def lemmatizeWord(lemmatizer, word, wordType):
+	word = word.strip().lower()
+	if wordType == WORD_PFM or wordType == ATRB_EX or wordType == ATRB_IN or wordType == ATRB_NO:
+		return lemmatizer.lemmatize(word, NOUN)
+	elif wordType == WORD_NEG or wordType == WORD_POS or wordType == CITE_WORD:
+		return lemmatizer.lemmatize(word, VERB)
+	else:
+		return lemmatizer.lemmatize(word)
 
 def getProcessedSentenceList(sentences):
 	return [' '.join(getProcessedWordList(sentence['content'])) for sentence in sentences]

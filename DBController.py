@@ -69,6 +69,9 @@ class DBController(object):
 	def getAllPfmNegAtrbSentenceWithString(self, string):
 		return self.db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
 
+	def getAllSentenceWithoutCiteWord(self):
+		return self.db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]})
+
 	def updateSentenceEngager(self, sentenceId, engagerId):
 		sentence = self.db.sentence.find_one({'id' : sentenceId})
 		if 'engager' in sentence and engagerId not in sentence['engager']:
@@ -87,16 +90,8 @@ class DBController(object):
 			companyList = [companyId]
 		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'company' : companyList}})
 
-	def updateSentenceCiteWord(self, sentenceId, word):
-		sentence = self.db.sentence.find_one({'id' : sentenceId})
-		key = getKeyFromWordType(CITE_WORD)
-		if key in sentence and word not in sentence[key]:
-			sentence[key].append(word)
-			citeWordList = sentence[key]
-		else:
-			citeWordList = [word]
+	def updateSentenceCiteWord(self, sentenceId, citeWordList):
 		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'cite' : citeWordList}})
-
 
 	def getArticleById(self, articleId):
 		return self.db.article.find_one({'id' : articleId})
