@@ -18,13 +18,14 @@ class SignifierParser(object):
 		self.exWord = getWordList(ATRB_EX)
 		self.inWord = getWordList(ATRB_IN)
 		self.citeWord = getWordList(CITE_WORD)
-		self.engagers = self.db.getAllEngager()
-		self.companies = self.db.getAllCompany()
+		self.engagers = list(self.db.getAllEngager())
+		self.companies = list(self.db.getAllCompany())
 
 
-	def extractAllSentenceToDB(self):
-		companies = list(self.companies)[0:1]
-		for company in companies:
+	def extractAllSentenceToDB(self, isReload=False):
+		if isReload:
+			self.db.dropSentence()
+		for company in self.companies:
 			articles = self.db.getAllArticleByCompanyCode(company['code'])
 			engagers = self.db.getAllEngagerByCompanyId(company['id'])
 			for i, article in enumerate(articles):
@@ -37,7 +38,7 @@ class SignifierParser(object):
 						if not isValidSentence(string):
 							continue
 						sentenceDict = {'content' : string.encode(ENCODE_UTF8), 'articleId' : article['id'], 'paragraph' : key}
-						sentenceDict = self.parseSentence(sentenceDict, engagers, companies)
+						sentenceDict = self.parseSentence(sentenceDict, engagers, self.companies)
 						if sentenceDict is not None:
 							self.db.insertSentence(sentenceDict)
 
@@ -209,10 +210,10 @@ class SignifierParser(object):
 
 if __name__ == '__main__':
 	sp = SignifierParser()
-	sp.extractAllSentenceToDB()
-	sp.parseAllSentenceCitation()
-	sp.parseAllSentenceEngagerCiteDistance()
-	sp.parseAllSentencePfm()
-	sp.parseAllSentenceAtrb()
+	sp.extractAllSentenceToDB(True)
+	# sp.parseAllSentenceCitation()
+	# sp.parseAllSentenceEngagerCiteDistance()
+	# sp.parseAllSentencePfm()
+	# sp.parseAllSentenceAtrb()
 
 	#BACKUP AND REWRITE OUTPUT!!!

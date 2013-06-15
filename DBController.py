@@ -20,6 +20,9 @@ class DBController(object):
 	def close(self):
 		self.client.end_request()
 
+	def dropSentence(self):
+		self.db.sentence.drop()
+
 	def insertArticle(self, articleDict):
 		self.db.article.insert(articleDict)
 
