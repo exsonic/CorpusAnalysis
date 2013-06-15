@@ -52,12 +52,14 @@ def loadAllXMLtoDB(inputDir):
 		print(dirName)
 		for fileName in fileNames:
 			try:
+				if not fileName.endswith('xml'):
+					continue
 				fileAbsPath = getAbsPath(dirName, fileName)
 				for articleDict in parseArticleFromXML(fileAbsPath):
+					#duplication check
 					if db.isArticleDuplicate(articleDict['tailParagraph']):
 						continue
-					articleDict['companyFolder'] = dirName.split('/')[1]
-					articleDict['subFolder'] = dirName.split('/')[2] if len(dirName.split('/')) > 2 else None
+					articleDict['filePath'] = fileAbsPath.split('Marshall_RA/')[1]
 					db.insertArticle(articleDict)
 			except Exception as e:
 				print e, dirName, fileName
@@ -69,7 +71,7 @@ def parseArticleFromXML(fileDir):
 		xmlString = re.sub(' xmlns="[^"]+"', '', xmlString, count=1)
 		root = ElementTree.fromstring(xmlString)
 	except Exception as e:
-		print e, '.Invalidate XML file. ', fileDir
+		print e, '.Invalide XML file. ', fileDir
 		return
 
 	#ignore tags: section, language, reference, notes, edition, columnName, credits
@@ -157,44 +159,34 @@ def parseSentenceFromAtrbFile(dirName, fileName):
 
 def loadEngagerAndCompanyToDB(filePath):
 	with open(filePath, 'rU') as f:
-		reader = csv.reader(f)
-		CEOList, companyList = [], []
-		for line in reader:
-			CEOList.append(line[-1])
-			companyList.append(line[-2])
-		#add analyst to engager
-		CEOList.extend(['CEO', 'Chief Executive Officer', 'Executive', 'leadership', 'management'])
-		CEOList = list(set(CEOList))
-		companyList = list(set(companyList))
-		analystList = ['analyst', 'Analyst']
-		companySuffixList = ['CP', 'CORP', 'INC', 'GRP', 'LLC', 'CO', 'LABS', 'HOLDING', 'BANK', 'TIRE', 'PHARM', 'ENERGY', 'SYSTEM', 'MICROSYSTEMS', 'COMPAN']
 		db = DBController()
-		for name in CEOList:
-			nameParts = name.split()
-			if name == 'CEO Name':
+		reader = csv.reader(f)
+		for i, line in enumerate(reader):
+			line = [word.strip() for word in line]
+			if i == 0:
 				continue
-			elif name == 'Chief Executive Officer':
-				firstName, lastName = name, name
-			elif len(nameParts) >= 3:
-				firstName, lastName = nameParts[0], nameParts[2]
+			if db.getEngagerByName(line[5]) is None:
+				engagerDict = {'name' : line[5], 'lastName' : line[6], 'type' : ENGAGER_CEO, 'gender' : line[-1]}
+				db.insertEngager(engagerDict)
+			if db.getCompanyByName(line[3]) is None:
+				engagerDict = db.getEngagerByName(line[5])
+				companyDict = {'id' : int(line[2]), 'name' : line[3], 'shortName' : line[4], 'code' : line[0], 'CEO' : {line[1] : engagerDict['id']}}
+				db.insertCompany(companyDict)
 			else:
-				firstName, lastName = nameParts[0], nameParts[-1]
-			CEODict = {'fullName' : name, 'firstName': firstName, 'lastName': lastName, 'type' : ENGAGER_CEO}
-			db.insertEngager(CEODict)
-		for name in analystList:
-			analystDict = {'fullName' : name, 'firstName': name, 'lastName': name, 'type' : ENGAGER_ANALYST}
-			db.insertEngager(analystDict)
-		for name in companyList:
-			name, shortName = name.upper(), name.upper()
-			for suffix in companySuffixList:
-				if len(name.split()) > 1 and name.endswith(suffix):
-					shortName = ' '.join(name.split()[0 : -1])
-				elif name.find(',') != -1:
-					shortName = name.split(',')[0]
-			companyDict = {'shortName' : shortName, 'fullName' : name}
-			db.insertCompany(companyDict)
+				engagerDict = db.getEngagerByName(line[5])
+				companyDict = db.getCompanyByName(line[3])
+				companyDict['CEO'][line[1]] = engagerDict['id']
+				db.updateCompanyCEO(companyDict['id'], companyDict['CEO'])
 
 
+		for name in ['CEO', 'Executive']:
+			engagerDict = {'name' : name, 'lastName' : name, 'type' : ENGAGER_CEO}
+			db.insertEngager(engagerDict)
+		for name in ['analyst']:
+			engagerDict = {'name' : name, 'lastName' : name, 'type' : ENGAGER_ANALYST}
+			db.insertEngager(engagerDict)
 
-# if __name__ == '__main__':
-# 	loadEngagerAndCompanyToDB('corpus/CEO.csv')
+
+if __name__ == '__main__':
+	# loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
+	loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')

@@ -47,37 +47,74 @@ class DataExporter(object):
 		with open('export/sentence.csv', 'wb') as f:
 			writer = csv.writer(f)
 			sentences = self.db.getAllSentence()
-			analystIdList = self.db.getEngagerIdListByType(ENGAGER_ANALYST)
-			atrbWordList, citeWordList, articleDict = getAtrbWordList(), getWordList(CITE_WORD), {}
-			attributeList = ['case', 'id', 'accessionNo', 'content', 'year', 'wordCount', 'pfm', 'pos', 'neg', 'in', 'ex',
-			                'CEO', 'analyst', 'company', 'cite'] + citeWordList + atrbWordList
+			articleDict = {}
+			attributeList = ['id', 'cotic', 'coname', 'filePath', 'accessionNo', 'content', 'coname','ceoname', 'cite',
+			                 'co_c', 'ceo_c', 'analyst_c', 'pfm', 'pfm_words', 'pos', 'pos_words', 'neg', 'neg_words',
+			                 'int', 'int_words', 'ext', 'ext_words',
+			                 'quote_sen', 'analyst']
 			writer.writerow(attributeList)
 			for i, sentence in enumerate(sentences):
-				print(i)
-				if sentence['articleId'] not in articleDict:
-					articleDict[sentence['articleId']] = self.db.getArticleById(sentence['articleId'])
-				atrbWordDict, citeWordDict = getAtrbWordDict(), getWordDict(CITE_WORD)
-				CEOCount, analystCount, year, case = 0, 0, articleDict[sentence['articleId']]['date'].year, articleDict[sentence['articleId']]['companyFolder']
-				companyCount = len(sentence['company']) if 'company' in sentence else 0
-				for engagerId in sentence['engager']:
-					if engagerId in analystIdList:
-						analystCount += 1
-					else:
-						CEOCount += 1
-				citeCount = len(sentence['cite'])
-				for word in sentence['cite']:
-					citeWordDict[word] += 1
-				for word in sentence['in']:
-					atrbWordDict[word] += 1
-				for word in sentence['ex']:
-					atrbWordDict[word] += 1
-				lineList = [case, sentence['id'], sentence['articleId'], sentence['content'].encode(ENCODE_UTF8), year, getStringWordCount(sentence['content']),
-				            len(sentence['pfm']), len(sentence['pos']), len(sentence['neg']), len(sentence['in']), len(sentence['ex']), CEOCount, analystCount, companyCount, citeCount]
-				for word in citeWordList:
-					lineList.append(citeWordDict[word])
-				for word in atrbWordList:
-					lineList.append(atrbWordDict[word])
-				writer.writerow(lineList)
+				try:
+					print(i)
+					if sentence['articleId'] not in articleDict:
+						articleDict[sentence['articleId']] = self.db.getArticleById(sentence['articleId'])
+					article = articleDict[sentence['articleId']]
+					articleCompanyCode = article['filePath'].split('/')[2]
+					articleCompany = self.db.getCompanyByCode(articleCompanyCode)
+					sentenceCompanyList = [self.db.getCompanyById(companyId) for companyId in sentence['company']]
+					sentenceCompanyNameString = ','.join([company['shortName'] for company in sentenceCompanyList])
+					sentenceEngagerList = [self.db.getEngagerById(engagerId) for engagerId in sentence['engager']]
+					CEOList = filter(lambda engager : engager['type'] == ENGAGER_CEO, sentenceEngagerList)
+					analystList =  filter(lambda engager : engager['type'] == ENGAGER_ANALYST, sentenceEngagerList)
+					CEONameString = ','.join([CEO['lastName'] for CEO in CEOList])
+					citeWordString = ','.join(sentence['cite'])
+					citeCompany, citeCEO, citeAnalyst = int(sentence['citeCompany']), int(sentence['citeCEO']), int(sentence['citeAnalyst'])
+					pfmWordString = ','.join(sentence['pfm'])
+					posWordString = ','.join(sentence['pos'])
+					negWordString = ','.join(sentence['neg'])
+					inWordString = ','.join(sentence['in'])
+					exWordString = ','.join(sentence['ex'])
+					quoteString = getQuotedString(sentence['content'])
+					analystSurroundString = getStringSurroundWordInDistance(sentence['content'], 'analyst', ANALYST_SURROUND_DISTANCE)
+					lineList = [sentence['id'], articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], sentence['content'],
+					            sentenceCompanyNameString, CEONameString, citeWordString, citeCompany, citeCEO, citeAnalyst,
+					            len(sentence['pfm']), pfmWordString, len(sentence['pos']), posWordString, len(sentence['neg']), negWordString,
+					            len(sentence['in']), inWordString, len(sentence['ex']), exWordString,
+					            quoteString, analystSurroundString]
+
+					writer.writerow(lineList)
+				except Exception as e:
+					print(e)
+
+	def exportArticleAnalysis(self):
+		with open('export/article.csv', 'wb') as f:
+			writer = csv.writer(f)
+			articles = self.db.getAllArticle()
+			attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'author',
+			                 'coname1', 'coname2', 'coname3', 'coname4', 'coname5',
+			                 'subjectCode1', 'subjectCode2', 'subjectCode3', 'subjectCode4', 'subjectCode5']
+			writer.writerow(attributeList)
+			for i, article in enumerate(articles):
+				try:
+					print(i)
+					articleCompanyCode = article['filePath'].split('/')[2]
+					articleCompany = self.db.getCompanyByCode(articleCompanyCode)
+					companyCodeList = [''] * ARTICLE_EXPORT_CODE_SIZE
+					subjectCodeList = [''] * ARTICLE_EXPORT_CODE_SIZE
+					for i, companyCode in enumerate(article['company']):
+						if i >= ARTICLE_EXPORT_CODE_SIZE:
+							break
+						companyCodeList[i] = companyCode
+					for i, subjectCode in enumerate(subjectCodeList):
+						if i >= ARTICLE_EXPORT_CODE_SIZE:
+							break
+						subjectCodeList[i] = subjectCode
+
+					lineList = [articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], article['date'], article['byline']] + companyCodeList + subjectCodeList
+					writer.writerow(lineList)
+				except Exception as e:
+					print(e)
+
 
 	def getTopWordList(self, wordCountList, wordTable, limit):
 		topWordList = []
@@ -177,4 +214,5 @@ class ExportArticleWordThread(Thread):
 
 if __name__ == '__main__':
 	de = DataExporter()
-	de.exportSentenceAnalysis()
+	# de.exportSentenceAnalysis()
+	de.exportArticleAnalysis()

@@ -11,7 +11,8 @@ class DBController(object):
 	def __init__(self):
 		try:
 			self.client = MongoClient()
-			self.db = self.client.CorpusAnalysis
+			# self.db = self.client.OriginalCorpus
+			self.db = self.client.ChemCorpus
 		except Exception as e:
 			print e
 			exit()
@@ -30,8 +31,8 @@ class DBController(object):
 	def getAllSentence(self, limit=0):
 		return self.db.sentence.find(timeout=False).limit(limit)
 
-	def getAllArticle(self):
-		return self.db.article.find(timeout=False)
+	def getAllArticle(self, limit=0):
+		return self.db.article.find(timeout=False).limit(limit)
 
 	def getALLArticleIdWithPfm(self):
 		articleIdList = [sentence['articleId'] for sentence in self.db.sentence.find()]
@@ -70,31 +71,43 @@ class DBController(object):
 		return self.db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
 
 	def getAllSentenceWithoutCiteWord(self):
-		return self.db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]})
+		return self.db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]}, timeout=False)
 
-	def updateSentenceEngager(self, sentenceId, engagerId):
-		sentence = self.db.sentence.find_one({'id' : sentenceId})
-		if 'engager' in sentence and engagerId not in sentence['engager']:
-			sentence['engager'].append(engagerId)
-			engagerList = sentence['engager']
-		else:
-			engagerList = [engagerId]
-		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'engager' : engagerList}})
+	def getAllArticleByCompanyCode(self, code):
+		return self.db.article.find({'filePath' : {'$regex' : code}}, timeout=False)
 
-	def updateSentenceCompany(self, sentenceId, companyId):
-		sentence = self.db.sentence.find_one({'id' : sentenceId})
-		if 'company' in sentence and companyId not in sentence['company']:
-			sentence['company'].append(companyId)
-			companyList = sentence['company']
-		else:
-			companyList = [companyId]
-		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'company' : companyList}})
+	def getEngagerByName(self, name):
+		return self.db.engager.find_one({'name' : name})
+
+	def getCompanyByName(self, name):
+		return self.db.company.find_one({'name' : name})
+
+	def updateCompanyCEO(self, companyId, CEODict):
+		self.db.company.update({'id' : companyId}, {'$set' : {'CEO' : CEODict}})
+
+	def updateSentenceEngager(self, sentenceId, engagerIdList):
+		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'engager' : engagerIdList}})
+
+	def updateSentenceCompany(self, sentenceId, companyIdList):
+		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'company' : companyIdList}})
 
 	def updateSentenceCiteWord(self, sentenceId, citeWordList):
 		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'cite' : citeWordList}})
 
+	def updateCiteDistance(self, sentenceId, isCiteCEO, isCiteAnalyst, isCiteCompany):
+		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'citeCEO' : isCiteCEO, 'citeAnalyst' : isCiteAnalyst, 'citeCompany' : isCiteCompany}})
+
+	def updatePfmDistance(self, sentenceId, isPfmPos, isPfmNeg):
+		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'pfmPos' : isPfmPos, 'pfmNeg' : isPfmNeg}})
+
 	def getArticleById(self, articleId):
 		return self.db.article.find_one({'id' : articleId})
+
+	def getCompanyById(self, companyId):
+		return self.db.company.find_one({'id' : companyId})
+
+	def getCompanyByCode(self, code):
+		return self.db.company.find_one({'code' : code})
 
 	def getPfmSentenceCount(self, articleId):
 		return self.db.sentence.find({'articleId' : articleId}).count()
@@ -176,8 +189,9 @@ class DBController(object):
 		self.db.engager.insert(engagerDict)
 
 	def insertCompany(self, companyDict):
-		newId = self.db.company.count()
-		companyDict['id'] = newId
+		if 'id' not in companyDict:
+			newId = self.db.company.count()
+			companyDict['id'] = newId
 		self.db.company.insert(companyDict)
 
 	def getEngagerById(self, engagerId):
@@ -186,8 +200,19 @@ class DBController(object):
 	def updateSentencePfm(self, sentenceId, pfmWordList, posWordList, negWordList):
 		self.db.sentence.update({'id' : sentenceId}, {'$set' : {'pfm' : pfmWordList, 'pos' : posWordList, 'neg' : negWordList}})
 
+	def getAllEngagerByType(self, engagerType):
+		return list(self.db.engager.find({'type' : engagerType}))
+
 	def getEngagerIdListByType(self, engagerType):
-		idList = []
-		for engager in self.db.engager.find({'type' : engagerType}):
-			idList.append(engager['id'])
-		return idList
+		engagers = self.getAllEngagerByType(engagerType)
+		return [engager['id'] for engager in engagers]
+
+	def getAllNoNameEngager(self):
+		return self.db.engager.find({'gender' : {'$exists' : False}})
+
+	def getAllEngagerByCompanyId(self, companyId):
+		company = self.getCompanyById(companyId)
+		CEOIdList =  list(set(company['CEO'].itervalues()))
+		engagers = [self.getEngagerById(CEOId) for CEOId in CEOIdList]
+		engagers.extend(self.getAllNoNameEngager())
+		return engagers

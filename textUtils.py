@@ -9,6 +9,7 @@ from nltk.stem.wordnet import WordNetLemmatizer
 from math import log10
 from collections import Counter
 from copy import deepcopy
+from re import findall
 
 def isValidSentence(string):
 		if string.find('=') != -1:
@@ -65,7 +66,7 @@ def getWordListFilePath(wordType):
 
 def getWordList(wordType):
 	with open(getWordListFilePath(wordType)) as f:
-		return [word.strip() for word in f.readlines()]
+		return [word.strip().lower() for word in f.readlines()]
 
 def getWordDictWithWordList(wordList):
 	return dict(zip(wordList, [0] * len(wordList)))
@@ -111,27 +112,18 @@ def getLemmatizer():
 	else:
 		return lemmatizer
 
-def getProcessedWordList(string, wordType=WORD_PFM):
+def getProcessedWordList(string, lemmatizeType=NOUN):
 	wordList = []
 	lemmatizer = getLemmatizer()
 	filterWordDict = getWordDict(FILTER_WORD)
 	for word in word_tokenize(string):
-		word = lemmatizeWord(lemmatizer, word, wordType)
+		word = lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
 		if word.isalpha() and word not in filterWordDict and len(word) > 1:
 			wordList.append(word)
 	return wordList
 
-def lemmatizeWord(lemmatizer, word, wordType):
-	word = word.strip().lower()
-	if wordType == WORD_PFM or wordType == ATRB_EX or wordType == ATRB_IN or wordType == ATRB_NO:
-		return lemmatizer.lemmatize(word, NOUN)
-	elif wordType == WORD_NEG or wordType == WORD_POS or wordType == CITE_WORD:
-		return lemmatizer.lemmatize(word, VERB)
-	else:
-		return lemmatizer.lemmatize(word)
-
-def getProcessedSentenceList(sentences):
-	return [' '.join(getProcessedWordList(sentence['content'])) for sentence in sentences]
+def getProcessedSentenceList(sentences, lemmatizeType=NOUN):
+	return [' '.join(getProcessedWordList(sentence['content'], lemmatizeType)) for sentence in sentences]
 
 def getTFIDFMatrix(sentences, wordTable):
 	matrix = []
@@ -171,4 +163,21 @@ def getAtrbWordDict():
 	return dict(zip(atrbWordList, [0] * len(atrbWordList)))
 
 def wrapWord(string):
-	return ' ' + string.strip() + ' '
+	#only warp half. In case of CEO's xxx. in this case, if we warp double end with space, it will not capture.
+	return ' ' + string.strip()
+
+def getQuotedString(string):
+	matches = findall(r'\"(.+?)\"',string)
+	return ','.join(matches)
+
+def getStringSurroundWordInDistance(string, word, distance):
+	wordList = getProcessedWordList(string, NOUN)
+	outputString = ''
+	try:
+		wordIndex = wordList.index(word)
+		startIndex = 0 if wordIndex < distance else wordIndex - distance
+		endIndex = len(wordList) if (wordIndex + distance) >= len(wordList) else wordIndex + distance
+		outputString = ' '.join(wordList[startIndex : endIndex])
+	except:
+		pass
+	return outputString
