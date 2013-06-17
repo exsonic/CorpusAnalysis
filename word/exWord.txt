@@ -11,3 +11,6 @@ labor
 material
 market
 government
+technology
+consumer
+rival
