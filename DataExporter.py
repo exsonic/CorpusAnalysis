@@ -76,7 +76,7 @@ class DataExporter(object):
 					exWordString = ','.join(sentence['ex'])
 					quoteString = getQuotedString(sentence['content'])
 					analystSurroundString = getStringSurroundWordInDistance(sentence['content'], 'analyst', ANALYST_SURROUND_DISTANCE)
-					lineList = [sentence['id'], articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], sentence['content'],
+					lineList = [sentence['_id'], articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], sentence['content'],
 					            sentenceCompanyNameString, CEONameString, citeWordString, citeCompany, citeCEO, citeAnalyst,
 					            len(sentence['pfm']), pfmWordString, len(sentence['pos']), posWordString, len(sentence['neg']), negWordString,
 					            len(sentence['in']), inWordString, len(sentence['ex']), exWordString,
@@ -110,7 +110,7 @@ class DataExporter(object):
 							break
 						subjectCodeList[i] = subjectCode
 
-					lineList = [articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], article['date'], article['byline']] + companyCodeList + subjectCodeList
+					lineList = [articleCompanyCode, articleCompany['name'], article['filePath'], article['_id'], article['date'], article['byline']] + companyCodeList + subjectCodeList
 					writer.writerow(lineList)
 				except Exception as e:
 					print(e)
@@ -140,7 +140,7 @@ class DataExporter(object):
 			sentences = self.db.getAllSentence()
 			for sentence in sentences:
 				if sentence[key]:
-					lineList = [sentence['id'], sentence['articleId'], sentence['paragraph'], sentence['content'],
+					lineList = [sentence['_id'], sentence['articleId'], sentence['paragraph'], sentence['content'],
 					            ' '.join(sentence['pfm']), ' '.join(set(sentence[key]))]
 					wordDict = getWordDict(wordType)
 					wordDict = countWord(sentence[key], wordDict)

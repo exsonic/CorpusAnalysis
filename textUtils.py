@@ -113,8 +113,8 @@ def getLemmatizer():
 		return lemmatizer
 
 def getProcessedWordList(string, lemmatizeType=NOUN):
-	wordList = []
 	lemmatizer = getLemmatizer()
+	wordList = []
 	filterWordDict = getWordDict(FILTER_WORD)
 	for word in word_tokenize(string):
 		word = lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
@@ -181,3 +181,7 @@ def getStringSurroundWordInDistance(string, word, distance):
 	except:
 		pass
 	return outputString
+
+def getChunkOfList(inputList, size):
+	for i in xrange(0, len(inputList), size):
+		yield inputList[i:i+size]

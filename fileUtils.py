@@ -83,7 +83,7 @@ def parseArticleFromXML(fileDir):
 		if articleId == '':
 			continue
 		else:
-			articleDict['id'] = articleId
+			articleDict['_id'] = articleId
 		articleDict['byline'] = getTagText(article, 'byline')
 		articleDict['headline'] = getAllSubTagText(article, 'headline')
 		articleDict['date'] = parser.parse(article.find('publicationDate')[0].text)
@@ -170,13 +170,13 @@ def loadEngagerAndCompanyToDB(filePath):
 				db.insertEngager(engagerDict)
 			if db.getCompanyByName(line[3]) is None:
 				engagerDict = db.getEngagerByName(line[5])
-				companyDict = {'id' : int(line[2]), 'name' : line[3], 'shortName' : line[4], 'code' : line[0], 'CEO' : {line[1] : engagerDict['id']}}
+				companyDict = {'_id' : int(line[2]), 'name' : line[3], 'shortName' : line[4], 'code' : line[0], 'CEO' : {line[1] : engagerDict['_id']}}
 				db.insertCompany(companyDict)
 			else:
 				engagerDict = db.getEngagerByName(line[5])
 				companyDict = db.getCompanyByName(line[3])
-				companyDict['CEO'][line[1]] = engagerDict['id']
-				db.updateCompanyCEO(companyDict['id'], companyDict['CEO'])
+				companyDict['CEO'][line[1]] = engagerDict['_id']
+				db.updateCompanyCEO(companyDict['_id'], companyDict['CEO'])
 
 
 		for name in ['CEO', 'Executive']:

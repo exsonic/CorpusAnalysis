@@ -48,7 +48,7 @@ class SentenceClusterer(object):
             wordList = getProcessedWordList(sentence['content'])
             vector = self.getSentenceVector(table, wordList)
             matrix.append(vector)
-            idList.append(sentence['id'])
+            idList.append(sentence['_id'])
         return numpy.array(matrix), idList
     
     def getSentenceVector(self, table, wordList):

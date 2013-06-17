@@ -2,9 +2,12 @@
 Created on 2013-5-9
 @author: Bobi Pu, bobi.pu@usc.edu
 """
+from Queue import Queue
+from threading import Thread, activeCount
+from nltk import WordNetLemmatizer, word_tokenize
 
 from nltk.tokenize import sent_tokenize
-from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord
+from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord, getChunkOfList, getWordDict
 from DBController import DBController
 from setting import *
 
@@ -20,7 +23,16 @@ class SignifierParser(object):
 		self.citeWord = getWordList(CITE_WORD)
 		self.engagers = list(self.db.getAllEngager())
 		self.companies = list(self.db.getAllCompany())
+		self.lemmatizer = WordNetLemmatizer()
+		self.filterWordDict = getWordDict(FILTER_WORD)
 
+	def getProcessedWordList(self, string, lemmatizeType=NOUN):
+		wordList = []
+		for word in word_tokenize(string):
+			word = self.lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
+			if word.isalpha() and word not in self.filterWordDict and len(word) > 1:
+				wordList.append(word)
+		return wordList
 
 	def extractAllSentenceToDB(self, isReload=False):
 		if isReload:
@@ -121,13 +133,6 @@ class SignifierParser(object):
 			self.db.updateSentenceEngager(sentence['id'], engagerIdList)
 			self.db.updateSentenceCompany(sentence['id'], companyIdList)
 
-	def parseAllSentenceEngagerCiteDistance(self):
-		sentences = self.db.getAllSentence()
-		for i, sentence in enumerate(sentences):
-			print(i)
-			isCiteCEO, isCiteAnalyst, isCiteCompany = self.isCiteInDistance(sentence)
-			self.db.updateCiteDistance(sentence['id'], isCiteCEO, isCiteAnalyst, isCiteCompany)
-
 	def parseAllSentencePfm(self):
 		#list them all, becaue if loop with cursor and update cursor pointed sentence at meantime, the cursor will be screwed.
 		sentences = list(self.db.getAllSentence())
@@ -153,14 +158,6 @@ class SignifierParser(object):
 			if ('ceo' in inWordList or 'executive' in inWordList) and sentence['cite']:
 				inWordList = []
 			self.db.updateSentenceAtrb(sentence['id'], exWordList, inWordList)
-
-	def parseAllSentenceCitation(self):
-		sentences = list(self.db.getAllSentence())
-		for i, sentence in enumerate(sentences):
-			print(i)
-			words = getProcessedWordList(sentence['content'], VERB)
-			citeWordList = filter(lambda  word : word in self.citeWord, words)
-			self.db.updateSentenceCiteWord(sentence['id'], citeWordList)
 
 	def isCiteInDistance(self, sentence):
 		#if (CEO or Company) and citation word happens within 5 word distance, capture
@@ -207,11 +204,54 @@ class SignifierParser(object):
 					filteredNegWordList.append(negWord)
 		return filteredPosWordList, filteredNegWordList
 
+	def parseSentenceEngagerCiteDistance(self, sentences, db):
+		for i, sentence in enumerate(sentences):
+			isCiteCEO, isCiteAnalyst, isCiteCompany = self.isCiteInDistance(sentence)
+			db.updateCiteDistance(sentence['id'], isCiteCEO, isCiteAnalyst, isCiteCompany)
+
+	def parseSentenceCitation(self, sentences):
+		for i, sentence in enumerate(sentences):
+			print(i)
+			if 'cite' in sentence:
+				continue
+			words = self.getProcessedWordList(sentence['content'], VERB)
+			citeWordList = filter(lambda  word : word in self.citeWord, words)
+			self.db.updateSentenceCiteWord(sentence['id'], citeWordList)
+
+def parseAllSentenceWithFunction():
+	db = DBController()
+	sentenceChunks = getChunkOfList(list(db.getAllSentence(400)), PARSE_CHUNK_SIZE)
+	queue = Queue()
+	for sentenceChunk in sentenceChunks:
+		queue.put(sentenceChunk)
+	for i in range(PARSE_THREAD_LIMIT):
+		thread = ParseThread(queue)
+		thread.daemon = True
+		thread.start()
+	queue.join()
+
+
+class ParseThread(Thread):
+	def __init__(self, queue):
+		super(ParseThread, self).__init__()
+		self.parser = SignifierParser()
+		self.queue = queue
+
+	def run(self):
+		while True:
+			sentences = self.queue.get()
+			self.parser.parseSentenceCitation(sentences)
+			print((self.queue.unfinished_tasks - 1) * PARSE_CHUNK_SIZE)
+			self.queue.task_done()
+
 
 if __name__ == '__main__':
 	sp = SignifierParser()
-	sp.extractAllSentenceToDB(True)
-	# sp.parseAllSentenceCitation()
+	# sp.extractAllSentenceToDB(True)
+	# parseAllSentenceWithFunction()
+	sentences = list(DBController().getAllSentence())
+	sp.parseSentenceCitation(sentences)
+	# sp.parseAllSentenceWithFunction(sp.parseSentenceCitation)
 	# sp.parseAllSentenceEngagerCiteDistance()
 	# sp.parseAllSentencePfm()
 	# sp.parseAllSentenceAtrb()

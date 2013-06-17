@@ -14,12 +14,4 @@ if __name__ == '__main__':
     exportType = parser.parse_args().type
     de = DataExporter()
     print 'Start to export....'
-    if exportType == 'pos':
-        de.exportPosNegSentence(WORD_POS)
-    elif exportType == 'neg':
-        de.exportPosNegSentence(WORD_NEG)
-    elif exportType == 'article':
-        de.exportArticleWithWordFrequency()
-    elif exportType == 'frequent':
-        de.exportFrequentWordFromSentence()
     print 'Done!' 
