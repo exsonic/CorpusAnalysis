@@ -45,24 +45,54 @@ def isFileNamesIncludeLetter(fileNames):
 			return True
 	return False
 
-def loadAllXMLtoDB(inputDir):
-	#have folder and p, pa info, insert after get
-	db = DBController()
-	for dirName, _, fileNames in os.walk(inputDir):
-		print(dirName)
-		for fileName in fileNames:
-			try:
-				if not fileName.endswith('xml'):
-					continue
-				fileAbsPath = getAbsPath(dirName, fileName)
-				for articleDict in parseArticleFromXML(fileAbsPath):
-					#duplication check
-					if db.isArticleDuplicate(articleDict['tailParagraph']):
-						continue
-					articleDict['filePath'] = fileAbsPath.split('Marshall_RA/')[1]
-					db.insertArticle(articleDict)
-			except Exception as e:
-				print e, dirName, fileName
+def convertDictTextEncoding(inputDict):
+	for k, v in inputDict.iteritems():
+		if isinstance(v, str) or isinstance(v, unicode):
+			inputDict[k] = v.encode(ENCODE_UTF8)
+	return inputDict
+
+def getAllSubTagText(article, tagName):
+	content = ''
+	tag = article.find(tagName)
+	if tag is not None:
+		for subTag in tag:
+			content += subTag.text
+	return content
+
+def getCodeList(article, tagName):
+	codeList = []
+	for company in article.iter(tagName):
+		codeList.append(company.attrib['code'])
+	return codeList
+
+def getTagText(article, tagName):
+	tag = article.find(tagName)
+	return tag.text if tag is not None else ''
+
+def getArticleFilePath(articleDict):
+	if articleDict['subFolder'] is not None:
+		return articleDict['companyFolder'] + '/' + articleDict['subFolder']
+	else:
+		return articleDict['companyFolder']
+
+def parseSentenceFromAtrbFile(dirName, fileName):
+	articleId = fileName.split('_')[0]
+	atrbType = getAtrbTypeKeyFromFolderName(dirName.split('/')[-1])
+	fileAbsPath = getAbsPath(dirName, fileName)
+	with open(fileAbsPath) as f:
+		content = f.readline().strip().encode(ENCODE_UTF8)
+	sentenceDict = {'articleId' : articleId, 'content' : content, 'atrb' : atrbType}
+	return sentenceDict
+
+def getAtrbTypeKeyFromFolderName(folderName):
+	if folderName == 'External':
+		return ATRB_EX
+	elif folderName == 'Internal':
+		return ATRB_IN
+	elif folderName == 'None':
+		return ATRB_NO
+	else:
+		raise Exception('invalid folderName')
 
 def parseArticleFromXML(fileDir):
 	try:
@@ -98,37 +128,29 @@ def parseArticleFromXML(fileDir):
 		articleDict = convertDictTextEncoding(articleDict)
 		yield articleDict
 
-def convertDictTextEncoding(inputDict):
-	for k, v in inputDict.iteritems():
-		if isinstance(v, str) or isinstance(v, unicode):
-			inputDict[k] = v.encode(ENCODE_UTF8)
-	return inputDict
-
-def getAllSubTagText(article, tagName):
-	content = ''
-	tag = article.find(tagName)
-	if tag is not None:
-		for subTag in tag:
-			content += subTag.text
-	return content
-
-def getCodeList(article, tagName):
-	codeList = []
-	for company in article.iter(tagName):
-		codeList.append(company.attrib['code'])
-	return codeList
-
-def getTagText(article, tagName):
-	tag = article.find(tagName)
-	return tag.text if tag is not None else ''
-
-def getArticleFilePath(articleDict):
-	if articleDict['subFolder'] is not None:
-		return articleDict['companyFolder'] + '/' + articleDict['subFolder']
-	else:
-		return articleDict['companyFolder']
+def loadAllXMLtoDB(inputDir):
+	#have folder and p, pa info, insert after get
+	db = DBController()
+	for dirName, _, fileNames in os.walk(inputDir):
+		print(dirName)
+		for fileName in fileNames:
+			try:
+				if not fileName.endswith('xml'):
+					continue
+				fileAbsPath = getAbsPath(dirName, fileName)
+				for articleDict in parseArticleFromXML(fileAbsPath):
+					#duplication check
+					if db.isArticleDuplicate(articleDict['tailParagraph']):
+						continue
+					articleDict['filePath'] = fileAbsPath.split('Marshall_RA/')[1]
+					db.insertArticle(articleDict)
+			except Exception as e:
+				print e, dirName, fileName
 
 def loadAtrbSentenceToDB(inputDir):
+	"""
+	Load all the annotated internal/external sentences to DB
+	"""
 	db = DBController()
 	for dirName, _, fileNames in os.walk(inputDir):
 		for fileName in fileNames:
@@ -137,25 +159,6 @@ def loadAtrbSentenceToDB(inputDir):
 				db.insertAnnotatedSentence(sentenceDict)
 			except Exception as e:
 				print e, dirName, fileName
-
-def getAtrbTypeKeyFromFolderName(folderName):
-	if folderName == 'External':
-		return ATRB_EX
-	elif folderName == 'Internal':
-		return ATRB_IN
-	elif folderName == 'None':
-		return ATRB_NO
-	else:
-		raise Exception('invalid folderName')
-
-def parseSentenceFromAtrbFile(dirName, fileName):
-	articleId = fileName.split('_')[0]
-	atrbType = getAtrbTypeKeyFromFolderName(dirName.split('/')[-1])
-	fileAbsPath = getAbsPath(dirName, fileName)
-	with open(fileAbsPath) as f:
-		content = f.readline().strip().encode(ENCODE_UTF8)
-	sentenceDict = {'articleId' : articleId, 'content' : content, 'atrb' : atrbType}
-	return sentenceDict
 
 def loadEngagerAndCompanyToDB(filePath):
 	with open(filePath, 'rU') as f:
@@ -187,6 +190,6 @@ def loadEngagerAndCompanyToDB(filePath):
 			db.insertEngager(engagerDict)
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 	# loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
-	loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
+	# loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')

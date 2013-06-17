@@ -7,7 +7,7 @@ from threading import Thread, activeCount
 from nltk import WordNetLemmatizer, word_tokenize
 
 from nltk.tokenize import sent_tokenize
-from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord, getChunkOfList, getWordDict
+from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord
 from DBController import DBController
 from setting import *
 
@@ -23,23 +23,13 @@ class SignifierParser(object):
 		self.citeWord = getWordList(CITE_WORD)
 		self.engagers = list(self.db.getAllEngager())
 		self.companies = list(self.db.getAllCompany())
-		self.lemmatizer = WordNetLemmatizer()
-		self.filterWordDict = getWordDict(FILTER_WORD)
-
-	def getProcessedWordList(self, string, lemmatizeType=NOUN):
-		wordList = []
-		for word in word_tokenize(string):
-			word = self.lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
-			if word.isalpha() and word not in self.filterWordDict and len(word) > 1:
-				wordList.append(word)
-		return wordList
 
 	def extractAllSentenceToDB(self, isReload=False):
 		if isReload:
 			self.db.dropSentence()
 		for company in self.companies:
 			articles = self.db.getAllArticleByCompanyCode(company['code'])
-			engagers = self.db.getAllEngagerByCompanyId(company['id'])
+			engagers = self.db.getAllEngagerByCompanyId(company['_id'])
 			for i, article in enumerate(articles):
 				print(i)
 				paragraphSet = ('byline', 'leadParagraph', 'tailParagraph')
@@ -49,35 +39,12 @@ class SignifierParser(object):
 					for string in sentenceList:
 						if not isValidSentence(string):
 							continue
-						sentenceDict = {'content' : string.encode(ENCODE_UTF8), 'articleId' : article['id'], 'paragraph' : key}
-						sentenceDict = self.parseSentence(sentenceDict, engagers, self.companies)
+						sentenceDict = {'content' : string.encode(ENCODE_UTF8), 'articleId' : article['_id'], 'paragraph' : key}
+						sentenceDict = self.parseRawSentence(sentenceDict, engagers, self.companies)
 						if sentenceDict is not None:
 							self.db.insertSentence(sentenceDict)
 
-
-	def parseSentenceToDB(self):
-		#deprecated, old general approach
-		articles = self.db.getAllArticle()
-		parsedArticleIdDict = self.db.getParsedArticleIdDict()
-		for i, article in enumerate(articles):
-			print(i)
-			if article['id'] in parsedArticleIdDict:
-				continue
-			else:
-				parsedArticleIdDict[article['id']] = True
-				paragraphSet = ('byline', 'leadParagraph', 'tailParagraph')
-				for key in paragraphSet:
-					paragraph = article[key]
-					sentenceList = sent_tokenize(paragraph)
-					for string in sentenceList:
-						if not isValidSentence(string):
-							continue
-						sentenceDict = {'content' : string.encode(ENCODE_UTF8), 'articleId' : article['id'], 'paragraph' : key}
-						sentenceDict = self.parseSentence(sentenceDict, self.engagers, self.companies)
-						if sentenceDict is not None:
-							self.db.insertSentence(sentenceDict)
-
-	def parseSentence(self, sentence, engagers, companies):
+	def parseRawSentence(self, sentence, engagers, companies):
 		engagerIdList, companyIdList = [], []
 		searchString = sentence['content']
 		for engager in engagers:
@@ -87,7 +54,7 @@ class SignifierParser(object):
 				else:
 					searchName = wrapWord(engager['lastName'])
 				if searchString.find(searchName) != -1:
-					engagerIdList.append(engager['id'])
+					engagerIdList.append(engager['_id'])
 			except:
 				pass
 
@@ -95,11 +62,11 @@ class SignifierParser(object):
 			try:
 				searchName = wrapWord(company['shortName']).title()
 				if searchString.find(searchName) != -1:
-					companyIdList.append(company['id'])
+					companyIdList.append(company['_id'])
 
 				searchName = wrapWord(company['shortName']).upper()
 				if searchString.find(searchName) != -1:
-					companyIdList.append(company['id'])
+					companyIdList.append(company['_id'])
 			except:
 				pass
 
@@ -110,6 +77,21 @@ class SignifierParser(object):
 			sentence['company'] = list(set(companyIdList))
 			return sentence
 
+	# def parseAllSentenceEngagerCiteDistance(self):
+	# 	sentences = list(self.db.getAllSentence())
+	# 	for i, sentence in enumerate(sentences):
+	# 		print(i)
+	# 		isCiteCEO, isCiteAnalyst, isCiteCompany = self.isCiteInDistance(sentence)
+	# 		self.db.updateCiteDistance(sentence['_id'], isCiteCEO, isCiteAnalyst, isCiteCompany)
+
+	def parseAllSentenceCitation(self):
+		sentences = list(self.db.getAllSentence())
+		for i, sentence in enumerate(sentences):
+			print(i)
+			words = getProcessedWordList(sentence['content'], VERB)
+			sentence['cite'] = filter(lambda  word : word in self.citeWord, words)
+			sentence['citeCEO'], sentence['citeAnalyst'], sentence['citeCompany'] = self.isCiteInDistance(sentence)
+			self.db.saveSentence(sentence)
 
 	def parseAllSentenceEngagerCompany(self):
 		sentences = self.db.getAllSentence()
@@ -122,16 +104,15 @@ class SignifierParser(object):
 				else:
 					searchName = wrapWord(engager['lastName']).lower()
 				if searchString.find(searchName) != -1:
-					engagerIdList.append(engager['id'])
+					engagerIdList.append(engager['_id'])
 
 			for company in self.companies:
 				searchName = wrapWord(company['shortName']).lower()
 				if searchString.find(searchName) != -1:
-					companyIdList.append(company['id'])
+					companyIdList.append(company['_id'])
 
-			engagerIdList, companyIdList = list(set(engagerIdList)), list(set(companyIdList))
-			self.db.updateSentenceEngager(sentence['id'], engagerIdList)
-			self.db.updateSentenceCompany(sentence['id'], companyIdList)
+			sentence['engager'], sentence['company'] = list(set(engagerIdList)), list(set(companyIdList))
+			self.db.saveSentence(sentence)
 
 	def parseAllSentencePfm(self):
 		#list them all, becaue if loop with cursor and update cursor pointed sentence at meantime, the cursor will be screwed.
@@ -146,7 +127,7 @@ class SignifierParser(object):
 
 			posWordList, negWordList = self.filterPosNegWordListByDistance(pfmSentenceWordList, posNegSentenceWordList, pfmWordList, posWordList, negWordList)
 
-			self.db.updateSentencePfm(sentence['id'], pfmWordList, posWordList, negWordList)
+			self.db.updateSentencePfm(sentence['_id'], pfmWordList, posWordList, negWordList)
 
 	def parseAllSentenceAtrb(self):
 		sentences = list(self.db.getAllSentence())
@@ -157,7 +138,7 @@ class SignifierParser(object):
 			inWordList = filter(lambda word : word in self.inWord, words)
 			if ('ceo' in inWordList or 'executive' in inWordList) and sentence['cite']:
 				inWordList = []
-			self.db.updateSentenceAtrb(sentence['id'], exWordList, inWordList)
+			self.db.updateSentenceAtrb(sentence['_id'], exWordList, inWordList)
 
 	def isCiteInDistance(self, sentence):
 		#if (CEO or Company) and citation word happens within 5 word distance, capture
@@ -204,55 +185,12 @@ class SignifierParser(object):
 					filteredNegWordList.append(negWord)
 		return filteredPosWordList, filteredNegWordList
 
-	def parseSentenceEngagerCiteDistance(self, sentences, db):
-		for i, sentence in enumerate(sentences):
-			isCiteCEO, isCiteAnalyst, isCiteCompany = self.isCiteInDistance(sentence)
-			db.updateCiteDistance(sentence['id'], isCiteCEO, isCiteAnalyst, isCiteCompany)
-
-	def parseSentenceCitation(self, sentences):
-		for i, sentence in enumerate(sentences):
-			print(i)
-			if 'cite' in sentence:
-				continue
-			words = self.getProcessedWordList(sentence['content'], VERB)
-			citeWordList = filter(lambda  word : word in self.citeWord, words)
-			self.db.updateSentenceCiteWord(sentence['id'], citeWordList)
-
-def parseAllSentenceWithFunction():
-	db = DBController()
-	sentenceChunks = getChunkOfList(list(db.getAllSentence(400)), PARSE_CHUNK_SIZE)
-	queue = Queue()
-	for sentenceChunk in sentenceChunks:
-		queue.put(sentenceChunk)
-	for i in range(PARSE_THREAD_LIMIT):
-		thread = ParseThread(queue)
-		thread.daemon = True
-		thread.start()
-	queue.join()
-
-
-class ParseThread(Thread):
-	def __init__(self, queue):
-		super(ParseThread, self).__init__()
-		self.parser = SignifierParser()
-		self.queue = queue
-
-	def run(self):
-		while True:
-			sentences = self.queue.get()
-			self.parser.parseSentenceCitation(sentences)
-			print((self.queue.unfinished_tasks - 1) * PARSE_CHUNK_SIZE)
-			self.queue.task_done()
 
 
 if __name__ == '__main__':
-	sp = SignifierParser()
 	# sp.extractAllSentenceToDB(True)
-	# parseAllSentenceWithFunction()
-	sentences = list(DBController().getAllSentence())
-	sp.parseSentenceCitation(sentences)
-	# sp.parseAllSentenceWithFunction(sp.parseSentenceCitation)
-	# sp.parseAllSentenceEngagerCiteDistance()
+	sp = SignifierParser()
+	# sp.parseAllSentenceCitation()
 	# sp.parseAllSentencePfm()
 	# sp.parseAllSentenceAtrb()
 

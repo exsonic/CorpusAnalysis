@@ -10,170 +10,156 @@ from setting import *
 class DBController(object):
 	def __init__(self):
 		try:
-			self.client = MongoClient()
 			# self.db = self.client.test
-			self.db = self.client.ChemCorpus
+			self._db = MongoClient().ChemCorpus
 		except Exception as e:
 			print e
 			exit()
 
-	def close(self):
-		self.client.end_request()
-
 	def dropSentence(self):
-		self.db.sentence.drop()
+		self._db.sentence.drop()
 
 	def insertArticle(self, articleDict):
-		self.db.article.insert(articleDict)
+		self._db.article.insert(articleDict)
 
 	def insertSentence(self, sentenceDict):
-		newId = self.db.sentence.count()
+		newId = self._db.sentence.count()
 		sentenceDict['_id'] = newId
-		self.db.sentence.insert(sentenceDict)
+		self._db.sentence.insert(sentenceDict)
+
+	def insertAnnotatedSentence(self, sentenceDict):
+		newId = self._db.AnnotatedSentence.count()
+		sentenceDict['_id'] = newId
+		self._db.annotatedSentence.insert(sentenceDict)
+
+	def insertEngager(self, engagerDict):
+		newId = self._db.engager.count()
+		engagerDict['_id'] = newId
+		self._db.engager.insert(engagerDict)
+
+	def insertCompany(self, companyDict):
+		if '_id' not in companyDict:
+			newId = self._db.company.count()
+			companyDict['_id'] = newId
+		self._db.company.insert(companyDict)
 
 	def getAllSentence(self, limit=0):
-		# return self.db.sentence.find({'cite' : {'$exists' : False}}, timeout=False).limit(limit)
-		return self.db.sentence.find(timeout=False).limit(limit)
+		return self._db.sentence.find(timeout=False).limit(limit)
 
 	def getAllArticle(self, limit=0):
-		return self.db.article.find(timeout=False).limit(limit)
+		return self._db.article.find(timeout=False).limit(limit)
 
 	def getALLArticleIdWithPfm(self):
-		articleIdList = [sentence['articleId'] for sentence in self.db.sentence.find()]
+		articleIdList = [sentence['articleId'] for sentence in self._db.sentence.find()]
 		return set(articleIdList)
 
 	def getAllPfmSentenceWithAtrb(self):
-		return self.db.sentence.find({'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, timeout=False)
+		return self._db.sentence.find({'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, timeout=False)
 
 	def getAllSentenceWithoutAtrb(self):
-		return self.db.sentence.find({'$and' : [{'ex' : {'$exists' : False}}, {'in' : {'$exists' : False}}]}, timeout=False)
+		return self._db.sentence.find({'$and' : [{'ex' : {'$exists' : False}}, {'in' : {'$exists' : False}}]}, timeout=False)
 
 	def getAllAnnotatedSentenceWithType(self, atrbType):
-		return self.db.AnnotatedSentence.find({'atrb' : atrbType}, timeout=False)
+		return self._db.AnnotatedSentence.find({'atrb' : atrbType}, timeout=False)
 
 	def getAllPfmNegSentence(self):
-		return self.db.sentence.find({'neg' : {'$exists' : True, '$ne' : []}}, timeout=False)
+		return self._db.sentence.find({'neg' : {'$exists' : True, '$ne' : []}}, timeout=False)
 
 	def getAllSentenceWithArticleId(self, articleId):
-		return self.db.sentence.find({'articleId' : articleId}, timeout=False)
+		return self._db.sentence.find({'articleId' : articleId}, timeout=False)
 
 	def getAllSentenceForOneType(self, wordType, limit=0):
 		key = getKeyFromWordType(wordType)
-		return self.db.sentence.find({key : {'$exists' : True, '$ne' : []}}, timeout=False).limit(limit)
+		return self._db.sentence.find({key : {'$exists' : True, '$ne' : []}}, timeout=False).limit(limit)
 
 	def getAllEngager(self):
-		return self.db.engager.find(timeout=False)
+		return self._db.engager.find(timeout=False)
 
 	def getAllCompany(self):
-		return self.db.company.find(timeout=False)
+		return self._db.company.find(timeout=False)
 
 	def getAllSentenceWithWord(self, word):
 		word = wrapWord(word)
-		return self.db.sentence.find({'content' : {'$regex' : word}}, timeout=False)
+		return self._db.sentence.find({'content' : {'$regex' : word}}, timeout=False)
 
 	def getAllPfmNegAtrbSentenceWithString(self, string):
-		return self.db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
+		return self._db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
 
 	def getAllSentenceWithoutCiteWord(self):
-		return self.db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]}, timeout=False)
+		return self._db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]}, timeout=False)
 
 	def getAllArticleByCompanyCode(self, code):
-		return self.db.article.find({'filePath' : {'$regex' : code}}, timeout=False)
+		return self._db.article.find({'filePath' : {'$regex' : code}}, timeout=False)
+
+	def getAllEngagerIdListByType(self, engagerType):
+		engagers = self.getAllEngagerByType(engagerType)
+		return [engager['_id'] for engager in engagers]
+
+	def getAllEngagerByType(self, engagerType):
+		return list(self._db.engager.find({'type' : engagerType}))
+
+	def getAllNoNameEngager(self):
+		return self._db.engager.find({'gender' : {'$exists' : False}})
+
+	def getAllEngagerByCompanyId(self, companyId):
+		company = self.getCompanyById(companyId)
+		CEOIdList =  list(set(company['CEO'].itervalues()))
+		engagers = [self.getEngagerById(CEOId) for CEOId in CEOIdList]
+		engagers.extend(self.getAllNoNameEngager())
+		return engagers
 
 	def getEngagerByName(self, name):
-		return self.db.engager.find_one({'name' : name})
+		return self._db.engager.find_one({'name' : name})
 
 	def getCompanyByName(self, name):
-		return self.db.company.find_one({'name' : name})
+		return self._db.company.find_one({'name' : name})
 
 	def updateCompanyCEO(self, companyId, CEODict):
-		self.db.company.update({'_id' : companyId}, {'$set' : {'CEO' : CEODict}})
+		self._db.company.update({'_id' : companyId}, {'$set' : {'CEO' : CEODict}})
 
 	def updateSentenceEngager(self, sentenceId, engagerIdList):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'engager' : engagerIdList}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'engager' : engagerIdList}})
 
 	def updateSentenceCompany(self, sentenceId, companyIdList):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'company' : companyIdList}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'company' : companyIdList}})
 
 	def updateSentenceCiteWord(self, sentenceId, citeWordList):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'cite' : citeWordList}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'cite' : citeWordList}})
 
 	def updateCiteDistance(self, sentenceId, isCiteCEO, isCiteAnalyst, isCiteCompany):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'citeCEO' : isCiteCEO, 'citeAnalyst' : isCiteAnalyst, 'citeCompany' : isCiteCompany}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'citeCEO' : isCiteCEO, 'citeAnalyst' : isCiteAnalyst, 'citeCompany' : isCiteCompany}})
 
 	def updatePfmDistance(self, sentenceId, isPfmPos, isPfmNeg):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'pfmPos' : isPfmPos, 'pfmNeg' : isPfmNeg}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'pfmPos' : isPfmPos, 'pfmNeg' : isPfmNeg}})
 
 	def getArticleById(self, articleId):
-		return self.db.article.find_one({'_id' : articleId})
+		return self._db.article.find_one({'_id' : articleId})
 
 	def getCompanyById(self, companyId):
-		return self.db.company.find_one({'_id' : companyId})
+		return self._db.company.find_one({'_id' : companyId})
 
 	def getCompanyByCode(self, code):
-		return self.db.company.find_one({'code' : code})
-
-	def getPfmSentenceCount(self, articleId):
-		return self.db.sentence.find({'articleId' : articleId}).count()
-
-	def updateArticlePfmSentenceCount(self, articleId, count):
-		isPfmRelated = True if count != 0 else False
-		self.db.article.update({'_id' : articleId}, {'$set' : {'pfmSentenceCount' : count, 'pfmRelated' : isPfmRelated}})
-
-	def countPfmSentenceInArticle(self):
-		articles = self.db.getAllArticle()
-		for article in articles:
-			count = self.db.getPfmSentenceCount(article['_id'])
-			self.db.updateArticlePfmSentenceCount(article['_id'], count)
+		return self._db.company.find_one({'code' : code})
 
 	def updateSentenceCluster(self, sentenceId, clusterNum):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'clusterSentence' : clusterNum}})
-
-	def getSentenceInCluster(self, clusterSentence):
-		return self.db.sentence.find({'clusterSentence': {'$exists' : True, '$all' : [clusterSentence]}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'clusterSentence' : clusterNum}})
 
 	def getSentenceCount(self):
-		return self.db.sentence.count()
+		return self._db.sentence.count()
 
 	def getSentenceInRange(self, startId, endId):
 		if startId < 1 or endId > self.getSentenceCount():
 			raise Exception('invalid sentence id range')
-		return self.db.sentence.find({'_id' : {'$gte' : startId, '$lte' : endId}})
-
-	def buildUnigramTable(self):
-		table, count = {}, 0
-		sentences = self.getAllSentence()
-		for sentence in sentences:
-			words = getProcessedWordList(sentence)
-			for word in words:
-				if word not in table:
-					table[word] = count
-					count += 1
-		self.db.unigramTable.insert(table)
+		return self._db.sentence.find({'_id' : {'$gte' : startId, '$lte' : endId}})
 
 	def getUnigramTable(self):
-		return self.db.unigramTable.find_one()
-
-	def getReverseUnigramTable(self):
-		table = self.getUnigramTable()
-		return dict(zip(table.values(), table.keys()))
-
-	def insertAnnotatedSentence(self, sentenceDict):
-		newId = self.db.AnnotatedSentence.count()
-		sentenceDict['_id'] = newId
-		self.db.annotatedSentence.insert(sentenceDict)
+		return self._db.unigramTable.find_one()
 
 	def updateSentenceAtrb(self, sentenceId, exWordList, inWordList):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'ex' : exWordList, 'in' : inWordList}})
-
-	def isSentenceDuplicate(self, string):
-		if self.db.sentence.find_one({'content' : string}) is not None:
-			return True
-		else:
-			return False
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'ex' : exWordList, 'in' : inWordList}})
 
 	def isArticleDuplicate(self, string):
-		if self.db.article.find_one({'tailParagraph' : string}) is not None:
+		if self._db.article.find_one({'tailParagraph' : string}) is not None:
 			return True
 		else:
 			return False
@@ -187,36 +173,11 @@ class DBController(object):
 				articleIdDitc[articleId] = True
 		return articleIdDitc
 
-	def insertEngager(self, engagerDict):
-		newId = self.db.engager.count()
-		engagerDict['_id'] = newId
-		self.db.engager.insert(engagerDict)
-
-	def insertCompany(self, companyDict):
-		if '_id' not in companyDict:
-			newId = self.db.company.count()
-			companyDict['_id'] = newId
-		self.db.company.insert(companyDict)
-
 	def getEngagerById(self, engagerId):
-		return self.db.engager.find_one({'_id' : engagerId})
+		return self._db.engager.find_one({'_id' : engagerId})
 
 	def updateSentencePfm(self, sentenceId, pfmWordList, posWordList, negWordList):
-		self.db.sentence.update({'_id' : sentenceId}, {'$set' : {'pfm' : pfmWordList, 'pos' : posWordList, 'neg' : negWordList}})
+		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'pfm' : pfmWordList, 'pos' : posWordList, 'neg' : negWordList}})
 
-	def getAllEngagerByType(self, engagerType):
-		return list(self.db.engager.find({'type' : engagerType}))
-
-	def getEngagerIdListByType(self, engagerType):
-		engagers = self.getAllEngagerByType(engagerType)
-		return [engager['_id'] for engager in engagers]
-
-	def getAllNoNameEngager(self):
-		return self.db.engager.find({'gender' : {'$exists' : False}})
-
-	def getAllEngagerByCompanyId(self, companyId):
-		company = self.getCompanyById(companyId)
-		CEOIdList =  list(set(company['CEO'].itervalues()))
-		engagers = [self.getEngagerById(CEOId) for CEOId in CEOIdList]
-		engagers.extend(self.getAllNoNameEngager())
-		return engagers
+	def saveSentence(self, sentenceDict):
+		self._db.sentence.save(sentenceDict)

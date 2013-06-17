@@ -113,9 +113,14 @@ def getLemmatizer():
 		return lemmatizer
 
 def getProcessedWordList(string, lemmatizeType=NOUN):
-	lemmatizer = getLemmatizer()
+	if 'lemmatizer' not in globals():
+		global lemmatizer
+		lemmatizer = WordNetLemmatizer()
+	if 'filterWordDict' not in globals():
+		global filterWordDict
+		filterWordDict = getWordDict(FILTER_WORD)
+
 	wordList = []
-	filterWordDict = getWordDict(FILTER_WORD)
 	for word in word_tokenize(string):
 		word = lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
 		if word.isalpha() and word not in filterWordDict and len(word) > 1:
@@ -181,7 +186,3 @@ def getStringSurroundWordInDistance(string, word, distance):
 	except:
 		pass
 	return outputString
-
-def getChunkOfList(inputList, size):
-	for i in xrange(0, len(inputList), size):
-		yield inputList[i:i+size]
