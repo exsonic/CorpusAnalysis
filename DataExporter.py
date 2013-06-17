@@ -55,7 +55,7 @@ class DataExporter(object):
 					exWordString = ','.join(sentence['ex'])
 					quoteString = getQuotedString(sentence['content'])
 					analystSurroundString = getStringSurroundWordInDistance(sentence['content'], 'analyst', ANALYST_SURROUND_DISTANCE)
-					lineList = [sentence['_id'], articleCompanyCode, articleCompany['name'], article['filePath'], article['id'], sentence['content'],
+					lineList = [sentence['_id'], articleCompanyCode, articleCompany['name'], article['filePath'], article['_id'], sentence['content'],
 					            sentenceCompanyNameString, CEONameString, citeWordString, citeCompany, citeCEO, citeAnalyst,
 					            len(sentence['pfm']), pfmWordString, len(sentence['pos']), posWordString, len(sentence['neg']), negWordString,
 					            len(sentence['in']), inWordString, len(sentence['ex']), exWordString,
@@ -97,5 +97,5 @@ class DataExporter(object):
 
 if __name__ == '__main__':
 	de = DataExporter()
-	# de.exportSentenceAnalysis()
-	de.exportArticleAnalysis()
+	de.exportSentenceAnalysis()
+	# de.exportArticleAnalysis()

@@ -133,6 +133,7 @@ def loadAllXMLtoDB(inputDir):
 	db = DBController()
 	for dirName, _, fileNames in os.walk(inputDir):
 		print(dirName)
+		articleDictList = []
 		for fileName in fileNames:
 			try:
 				if not fileName.endswith('xml'):
@@ -143,9 +144,10 @@ def loadAllXMLtoDB(inputDir):
 					if db.isArticleDuplicate(articleDict['tailParagraph']):
 						continue
 					articleDict['filePath'] = fileAbsPath.split('Marshall_RA/')[1]
-					db.insertArticle(articleDict)
+					articleDictList.append(articleDict)
 			except Exception as e:
 				print e, dirName, fileName
+		db.insertArticleInBatch(articleDictList)
 
 def loadAtrbSentenceToDB(inputDir):
 	"""

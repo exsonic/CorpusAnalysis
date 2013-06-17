@@ -22,6 +22,9 @@ class DBController(object):
 	def insertArticle(self, articleDict):
 		self._db.article.insert(articleDict)
 
+	def insertArticleInBatch(self, articleDictList):
+		self._db.article.insert(articleDictList)
+
 	def insertSentence(self, sentenceDict):
 		newId = self._db.sentence.count()
 		sentenceDict['_id'] = newId

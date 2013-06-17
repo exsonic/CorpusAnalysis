@@ -187,9 +187,9 @@ class SignifierParser(object):
 
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 	# sp.extractAllSentenceToDB(True)
-	sp = SignifierParser()
+	# sp = SignifierParser()
 	# sp.parseAllSentenceCitation()
 	# sp.parseAllSentencePfm()
 	# sp.parseAllSentenceAtrb()
