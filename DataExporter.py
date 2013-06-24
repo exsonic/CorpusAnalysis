@@ -84,12 +84,12 @@ class DataExporter(object):
 						if i >= ARTICLE_EXPORT_CODE_SIZE:
 							break
 						companyCodeList[i] = companyCode
-					for i, subjectCode in enumerate(subjectCodeList):
+					for i, subjectCode in enumerate(article['newsSubject']):
 						if i >= ARTICLE_EXPORT_CODE_SIZE:
 							break
 						subjectCodeList[i] = subjectCode
 
-					lineList = [articleCompanyCode, articleCompany['name'], article['filePath'], article['_id'], article['date'], article['byline']] + companyCodeList + subjectCodeList
+					lineList = [articleCompanyCode, articleCompany['name'], article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline']] + companyCodeList + subjectCodeList
 					writer.writerow(lineList)
 				except Exception as e:
 					print(e)
@@ -97,5 +97,5 @@ class DataExporter(object):
 
 if __name__ == '__main__':
 	de = DataExporter()
-	de.exportSentenceAnalysis()
-	# de.exportArticleAnalysis()
+	# de.exportSentenceAnalysis()
+	de.exportArticleAnalysis()
