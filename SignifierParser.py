@@ -7,9 +7,9 @@ from threading import Thread, activeCount
 from nltk import WordNetLemmatizer, word_tokenize
 
 from nltk.tokenize import sent_tokenize
-from textUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord
+from TextUtils import getWordList, getProcessedWordList, isValidSentence, wrapWord
 from DBController import DBController
-from setting import *
+from Setting import *
 
 class SignifierParser(object):
 

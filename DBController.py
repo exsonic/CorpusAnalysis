@@ -4,8 +4,8 @@ Created on 2013-5-8
 """
 
 from pymongo import MongoClient
-from textUtils import *
-from setting import *
+from TextUtils import *
+from Setting import *
 
 class DBController(object):
 	def __init__(self):

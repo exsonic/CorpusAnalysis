@@ -6,13 +6,13 @@ Created on 2013-5-10
 from DBController import DBController
 import csv
 import os
-from textUtils import *
-from setting import *
+from TextUtils import *
+from Setting import *
 from threading import Thread, activeCount
 from Queue import Queue
 from sklearn.feature_extraction.text import CountVectorizer
 from numpy import sum
-from fileUtils import getAtrbTypeKeyFromFolderName
+from FileUtils import getAtrbTypeKeyFromFolderName
 
 
 class DataExporter(object):

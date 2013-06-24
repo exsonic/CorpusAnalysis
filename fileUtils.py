@@ -3,7 +3,7 @@ Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
 import os, shutil, re
-from setting import *
+from Setting import *
 from xml.etree import ElementTree
 from dateutil import parser
 from DBController import DBController

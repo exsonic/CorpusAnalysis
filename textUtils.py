@@ -3,7 +3,7 @@ Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
 
-from setting import *
+from Setting import *
 from nltk.tokenize import word_tokenize
 from nltk.stem.wordnet import WordNetLemmatizer
 from math import log10
