@@ -2,7 +2,7 @@ Corpus Analysis
 ==============
 bobi.pu@usc.edu
 
-This code is for research use. Its IP belongs to USC Marshall Business School.
+This code is for research use of public companies' news corpus. Its IP belongs to USC Marshall Business School.
 
 This research's corpus from FECTIVA Database, including all journal and articles of public companies in certain field.
 
