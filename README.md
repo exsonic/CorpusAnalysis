@@ -9,6 +9,8 @@ This research's corpus from FECTIVA Database, including all journal and articles
 Features
 ---------
 
+Apply NLP and text mining techniques to implement following features.
+
 1.Raw corpus parsing.
 
 2.Signifier parsing.
@@ -18,6 +20,8 @@ Features
 4.Attribution classification.
 
 5.Engager detection.
+
+6.Report generating.
 
 
 Toolkit
