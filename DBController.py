@@ -6,6 +6,7 @@ Created on 2013-5-8
 from pymongo import MongoClient
 from TextUtils import *
 from Setting import *
+import re
 
 class DBController(object):
 	def __init__(self):
@@ -19,8 +20,8 @@ class DBController(object):
 	def dropSentence(self):
 		self._db.sentence.drop()
 
-	def insertArticle(self, articleDict):
-		self._db.article.insert(articleDict)
+	def saveArticle(self, articleDict):
+		self._db.article.save(articleDict)
 
 	def insertArticleInBatch(self, articleDictList):
 		self._db.article.insert(articleDictList)
@@ -52,29 +53,6 @@ class DBController(object):
 	def getAllArticle(self, limit=0):
 		return self._db.article.find(timeout=False).limit(limit)
 
-	def getALLArticleIdWithPfm(self):
-		articleIdList = [sentence['articleId'] for sentence in self._db.sentence.find()]
-		return set(articleIdList)
-
-	def getAllPfmSentenceWithAtrb(self):
-		return self._db.sentence.find({'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, timeout=False)
-
-	def getAllSentenceWithoutAtrb(self):
-		return self._db.sentence.find({'$and' : [{'ex' : {'$exists' : False}}, {'in' : {'$exists' : False}}]}, timeout=False)
-
-	def getAllAnnotatedSentenceWithType(self, atrbType):
-		return self._db.AnnotatedSentence.find({'atrb' : atrbType}, timeout=False)
-
-	def getAllPfmNegSentence(self):
-		return self._db.sentence.find({'neg' : {'$exists' : True, '$ne' : []}}, timeout=False)
-
-	def getAllSentenceWithArticleId(self, articleId):
-		return self._db.sentence.find({'articleId' : articleId}, timeout=False)
-
-	def getAllSentenceForOneType(self, wordType, limit=0):
-		key = getKeyFromWordType(wordType)
-		return self._db.sentence.find({key : {'$exists' : True, '$ne' : []}}, timeout=False).limit(limit)
-
 	def getAllEngager(self):
 		return self._db.engager.find(timeout=False)
 
@@ -82,21 +60,13 @@ class DBController(object):
 		return self._db.company.find(timeout=False)
 
 	def getAllSentenceWithWord(self, word):
-		word = wrapWord(word)
-		return self._db.sentence.find({'content' : {'$regex' : word}}, timeout=False)
-
-	def getAllPfmNegAtrbSentenceWithString(self, string):
-		return self._db.sentence.find({'$and' : [{'$or' : [{'ex' : {'$exists' : True, '$ne' : []}}, {'in' : {'$exists' : True, '$ne' : []}}]}, {'content' : {'$regex' : string}}]}, timeout=False)
+		return self._db.sentence.find({'content' : re.compile(r'\W' + word + '\W|^' + word + '\W')}, timeout=False)
 
 	def getAllSentenceWithoutCiteWord(self):
 		return self._db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]}, timeout=False)
 
 	def getAllArticleByCompanyCode(self, code):
-		return self._db.article.find({'filePath' : {'$regex' : code}}, timeout=False)
-
-	def getAllEngagerIdListByType(self, engagerType):
-		engagers = self.getAllEngagerByType(engagerType)
-		return [engager['_id'] for engager in engagers]
+		return self._db.article.find({'filePath' : re.compile(r'\\' + code + '\\')}, timeout=False)
 
 	def getAllEngagerByType(self, engagerType):
 		return list(self._db.engager.find({'type' : engagerType}))
@@ -119,21 +89,6 @@ class DBController(object):
 
 	def updateCompanyCEO(self, companyId, CEODict):
 		self._db.company.update({'_id' : companyId}, {'$set' : {'CEO' : CEODict}})
-
-	def updateSentenceEngager(self, sentenceId, engagerIdList):
-		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'engager' : engagerIdList}})
-
-	def updateSentenceCompany(self, sentenceId, companyIdList):
-		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'company' : companyIdList}})
-
-	def updateSentenceCiteWord(self, sentenceId, citeWordList):
-		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'cite' : citeWordList}})
-
-	def updateCiteDistance(self, sentenceId, isCiteCEO, isCiteAnalyst, isCiteCompany):
-		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'citeCEO' : isCiteCEO, 'citeAnalyst' : isCiteAnalyst, 'citeCompany' : isCiteCompany}})
-
-	def updatePfmDistance(self, sentenceId, isPfmPos, isPfmNeg):
-		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'pfmPos' : isPfmPos, 'pfmNeg' : isPfmNeg}})
 
 	def getArticleById(self, articleId):
 		return self._db.article.find_one({'_id' : articleId})
