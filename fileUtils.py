@@ -3,6 +3,8 @@ Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
 import os, shutil, re
+from pyth.plugins.rtf15.reader import Rtf15Reader
+from pyth.plugins.plaintext.writer import PlaintextWriter
 from Setting import *
 from xml.etree import ElementTree
 from dateutil import parser
@@ -48,7 +50,7 @@ def isFileNamesIncludeLetter(fileNames):
 def convertDictTextEncoding(inputDict):
 	for k, v in inputDict.iteritems():
 		if isinstance(v, str) or isinstance(v, unicode):
-			inputDict[k] = v.encode(ENCODE_UTF8)
+			inputDict[k] = v.encode('utf-8')
 	return inputDict
 
 def getAllSubTagText(article, tagName):
@@ -80,7 +82,7 @@ def parseSentenceFromAtrbFile(dirName, fileName):
 	atrbType = getAtrbTypeKeyFromFolderName(dirName.split('/')[-1])
 	fileAbsPath = getAbsPath(dirName, fileName)
 	with open(fileAbsPath) as f:
-		content = f.readline().strip().encode(ENCODE_UTF8)
+		content = f.readline().strip().encode('utf-8')
 	sentenceDict = {'articleId' : articleId, 'content' : content, 'atrb' : atrbType}
 	return sentenceDict
 
@@ -149,6 +151,63 @@ def loadAllXMLtoDB(inputDir):
 				print e, dirName, fileName
 		db.insertArticleInBatch(articleDictList)
 
+
+##########################################################################################################################
+############ Code above is to load all article in XML format, this format is not available, right now is RTF format#######
+############ Code below is to load all article in RTF format to DB                                                 #######
+##########################################################################################################################
+
+def loadAllRTFToDB(folderPath):
+	db = DBController()
+	for dirPath, dirNames, fileNames in os.walk(folderPath):
+		for fileName in fileNames:
+			if not fileName.endswith('.rtf'):
+				continue
+			filePath = os.path.join(dirPath, fileName)
+			print(filePath)
+			try:
+				doc = Rtf15Reader.read(open(filePath))
+				text = PlaintextWriter.write(doc).getvalue()
+			except:
+				continue
+			lines = [line.strip() for line in text.split('\n') if line]
+			articleLinesDict, articleStartIndex = {}, 0
+			for i, line in enumerate(lines):
+				if line.startswith('Document ') and len(line.split(' ')) == 2:
+					articleId = line.split(' ')[-1]
+					articleLinesDict[articleId] = lines[articleStartIndex : i]
+					articleStartIndex = i + 1
+
+			for articleId, lines in articleLinesDict.iteritems():
+				bylineIndex, wordCountIndex, textStartIndex = -1, -1, -1
+				for i, line in enumerate(lines):
+					line = line.lower()
+					if line.startswith('by '):
+						bylineIndex = i
+					elif line.endswith(' words'):
+						wordCountIndex = i
+					elif line == 'english':
+						textStartIndex = i + 2
+
+				if wordCountIndex == -1 or textStartIndex == -1 or wordCountIndex > textStartIndex:
+					print(filePath + ', ' + articleId)
+				else:
+					articleDict = {'_id': articleId,
+					               'filePath' : filePath.split('Marshall_RA/')[-1],
+					               'headline': ' '.join(lines[: wordCountIndex]) if bylineIndex == -1 else ' '.join(lines[: bylineIndex]),
+					               'byline' : '' if bylineIndex == -1 else lines[bylineIndex],
+					               'date' : parser.parse(lines[wordCountIndex + 1]),
+					               'sourceName' : lines[wordCountIndex + 2] if lines[wordCountIndex + 2].find(' AM') == -1 and lines[wordCountIndex + 2].find(' PM') == -1 else lines[wordCountIndex + 3],
+					               'leadParagraph' : '',
+					               'tailParagraph' : '\n'.join(lines[textStartIndex:]),
+					               'sourceCode' : '', 'industry' : [], 'region' : [], 'newsSubject' : [], 'company' : []}
+					db.saveArticle(articleDict)
+
+
+
+
+##########################################################################################################################
+
 def loadAtrbSentenceToDB(inputDir):
 	"""
 	Load all the annotated internal/external sentences to DB
@@ -192,6 +251,7 @@ def loadEngagerAndCompanyToDB(filePath):
 			db.insertEngager(engagerDict)
 
 
-# if __name__ == '__main__':
-	# loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
+if __name__ == '__main__':
+# 	loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
 	# loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
+	loadAllRTFToDB('/Users/exsonic/Developer/Marshall_RA/0.chem_50')

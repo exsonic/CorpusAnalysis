@@ -167,10 +167,6 @@ def getAtrbWordDict():
 	atrbWordList = getAtrbWordList()
 	return dict(zip(atrbWordList, [0] * len(atrbWordList)))
 
-def wrapWord(string):
-	#only warp half. In case of CEO's xxx. in this case, if we warp double end with space, it will not capture.
-	return ' ' + string.strip()
-
 def getQuotedString(string):
 	matches = findall(r'\"(.+?)\"',string)
 	return ','.join(matches)
