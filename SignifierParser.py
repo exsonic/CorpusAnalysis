@@ -157,8 +157,8 @@ class SignifierParser(object):
 if __name__ == '__main__':
 	sp = SignifierParser()
 	# sp.extractAllSentenceToDB(True)
-	sp.parseAllSentenceCitation()
+	# sp.parseAllSentenceCitation()
 	# sp.parseAllSentencePfm()
-	# sp.parseAllSentenceAtrb()
+	sp.parseAllSentenceAtrb()
 
 	#BACKUP AND REWRITE OUTPUT!!!

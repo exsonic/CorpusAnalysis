@@ -97,7 +97,7 @@ class DBController(object):
 		return self._db.company.find_one({'_id' : companyId})
 
 	def getCompanyByCode(self, code):
-		return self._db.company.find_one({'code' : code})
+		return self._db.company.find_one({'code' : re.compile(r'\b' + code + '\b|' + code, re.IGNORECASE)})
 
 	def updateSentenceCluster(self, sentenceId, clusterNum):
 		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'clusterSentence' : clusterNum}})
