@@ -169,7 +169,7 @@ def getAtrbWordDict():
 
 def getQuotedString(string):
 	matches = findall(r'\"(.+?)\"',string)
-	return ','.join(matches)
+	return ', '.join(matches)
 
 def getStringSurroundWordInDistance(string, word, distance):
 	wordList = getProcessedWordList(string, NOUN)

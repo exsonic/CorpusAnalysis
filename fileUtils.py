@@ -253,5 +253,5 @@ def loadEngagerAndCompanyToDB(filePath):
 
 if __name__ == '__main__':
 # 	loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
-	# loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
-	loadAllRTFToDB('/Users/exsonic/Developer/Marshall_RA/0.chem_50')
+	loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
+	# loadAllRTFToDB('/Users/exsonic/Developer/Marshall_RA/0.chem_50')
