@@ -19,17 +19,34 @@ class SignifierParser(object):
 		self.exWord = getWordList(ATRB_EX)
 		self.inWord = getWordList(ATRB_IN)
 		self.citeWord = getWordList(CITE_WORD)
-		self.engagers = list(self.db.getAllEngager())
-		self.companies = list(self.db.getAllCompany())
+		self.engagerList = list(self.db.getAllEngager())
+		self.companyList = list(self.db.getAllCompany())
+
+		self.engagerRegexPatternDict, self.companyRegexPatternDict = self.getRegexPatternDictForEngagerAndCompany()
+
+	def getRegexPatternDictForEngagerAndCompany(self):
+		engagerRegexPatternDict, companyRegexPatternDict = {}, {}
+		for engager in self.engagerList:
+			if engager['lastName'] == 'Jones' or engager['lastName'] == 'Johnson' or engager['lastName'] == 'West' or engager['lastName'] == 'Post' or engager['lastName'] == 'Ford':
+				searchName = engager['name']
+			else:
+				searchName = engager['lastName']
+			engagerRegexPatternDict[engager['_id']] = re.compile(r'\b' + searchName + r'\b')
+
+		for company in self.companyList:
+			companyRegexPatternDict[company['_id']] = re.compile(r'\b' + company['shortName'] + r'\b', re.IGNORECASE)
+
+		return engagerRegexPatternDict, companyRegexPatternDict
 
 	def extractAllSentenceToDB(self, isReload=False):
 		if isReload:
 			self.db.dropSentence()
-		for company in self.companies:
-			articles = self.db.getAllArticleByCompanyCode(company['code'])
-			engagers = self.db.getAllEngagerByCompanyId(company['_id'])
-			for i, article in enumerate(articles):
-				print(i)
+		# for company in self.companies:
+		for i, company in enumerate(self.companyList):
+			articles = list(self.db.getAllArticleByCompanyCode(company['code']))
+			engagers = list(self.db.getAllEngagerByCompanyId(company['_id']))
+			for j, article in enumerate(articles):
+				print(i, j)
 				paragraphSet = ('leadParagraph', 'tailParagraph')
 				for key in paragraphSet:
 					paragraph = article[key]
@@ -38,39 +55,26 @@ class SignifierParser(object):
 						if not isValidSentence(string):
 							continue
 						sentenceDict = {'content' : string.encode('utf-8'), 'articleId' : article['_id'], 'paragraph' : key}
-						sentenceDict = self.parseRawSentence(sentenceDict, engagers, self.companies)
+						sentenceDict = self.parseRawSentence(sentenceDict, engagers)
 						if sentenceDict is not None:
 							self.db.insertSentence(sentenceDict)
 
-	def parseRawSentence(self, sentence, engagers, companies):
+	def parseRawSentence(self, sentenceDict, engagerList):
 		engagerIdList, companyIdList = [], []
-		searchString = sentence['content']
-		for engager in engagers:
-			try:
-				if engager['lastName'] == 'Jones' or engager['lastName'] == 'Johnson' or engager['lastName'] == 'West' or engager['lastName'] == 'Post' or engager['lastName'] == 'Ford':
-					searchName = engager['name']
-				else:
-					searchName = engager['lastName']
-				pattern = re.compile(r'^' + searchName + '\W|\W' + searchName + '\W')
-				if pattern.search(searchString) is not None:
-					engagerIdList.append(engager['_id'])
-			except:
-				pass
+		for engager in engagerList:
+			if self.engagerRegexPatternDict[engager['_id']].search(sentenceDict['content']) is not None:
+				engagerIdList.append(engager['_id'])
 
-		for company in companies:
-			try:
-				pattern = re.compile(r'^' + company['shortName'] + '\W|\W' + company['shortName'] + '\W', re.IGNORECASE)
-				if pattern.search(searchString) is not None:
-					companyIdList.append(company['_id'])
-			except:
-				pass
+		for company in self.companyList:
+			if self.companyRegexPatternDict[company['_id']].search(sentenceDict['content']) is not None:
+				companyIdList.append(company['_id'])
 
 		if not engagerIdList and not companyIdList:
 			return None
 		else:
-			sentence['engager'] = list(set(engagerIdList))
-			sentence['company'] = list(set(companyIdList))
-			return sentence
+			sentenceDict['engager'] = list(set(engagerIdList))
+			sentenceDict['company'] = list(set(companyIdList))
+			return sentenceDict
 
 	def parseAllSentenceCitation(self):
 		sentences = list(self.db.getAllSentence())

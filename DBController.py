@@ -60,13 +60,14 @@ class DBController(object):
 		return self._db.company.find(timeout=False)
 
 	def getAllSentenceWithWord(self, word):
-		return self._db.sentence.find({'content' : re.compile(r'\W' + word + '\W|^' + word + '\W')}, timeout=False)
+		return self._db.sentence.find({'content' : re.compile(r'\b' + word + r'\b')}, timeout=False)
 
 	def getAllSentenceWithoutCiteWord(self):
 		return self._db.sentence.find({'$or' : [{'cite' : {'$exists' : False}}, {'cite' : {'$exists' : True, '$size' : 0}}]}, timeout=False)
 
 	def getAllArticleByCompanyCode(self, code):
-		return self._db.article.find({'filePath' : re.compile(r'\\' + code + '\\')}, timeout=False)
+		code = re.sub(r'\.', r'\.', code)
+		return self._db.article.find({'filePath' : re.compile(code)}, timeout=False)
 
 	def getAllEngagerByType(self, engagerType):
 		return list(self._db.engager.find({'type' : engagerType}))
@@ -97,7 +98,8 @@ class DBController(object):
 		return self._db.company.find_one({'_id' : companyId})
 
 	def getCompanyByCode(self, code):
-		return self._db.company.find_one({'code' : re.compile(r'\b' + code + '\b|' + code, re.IGNORECASE)})
+		code = re.sub(r'\.', r'\.', code)
+		return self._db.company.find_one({'code' : re.compile(r'\b' + code + r'\b', re.IGNORECASE)})
 
 	def updateSentenceCluster(self, sentenceId, clusterNum):
 		self._db.sentence.update({'_id' : sentenceId}, {'$set' : {'clusterSentence' : clusterNum}})
