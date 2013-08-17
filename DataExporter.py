@@ -29,7 +29,7 @@ class DataExporter(object):
 			articleDict = {}
 			attributeList = ['id', 'cotic', 'coname', 'filePath', 'accessionNo', 'content', 'coname','ceoname', 'cite',
 			                 'co_c', 'ceo_c', 'analyst_c', 'pfm', 'pfm_words', 'pos', 'pos_words', 'neg', 'neg_words',
-			                 'int', 'int_words', 'ext', 'ext_words',
+			                 'internal', 'int_words', 'external', 'ext_words',
 			                 'quote_sen', 'analyst']
 			writer.writerow(attributeList)
 			for i, sentence in enumerate(sentences):
