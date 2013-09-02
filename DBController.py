@@ -82,6 +82,18 @@ class DBController(object):
 		engagers.extend(self.getAllNoNameEngager())
 		return engagers
 
+	def getAllArticleBySearchString(self, searchString):
+		if searchString is None:
+			return []
+		elif searchString.find(',') != -1:
+			regexString = ''
+			for keyword in searchString.split(','):
+				regexString += (r'\b' + keyword + r'\b.*')
+		else:
+			regexString = r'\b' + searchString + r'\b'
+		pattern = re.compile(regexString, re.IGNORECASE)
+		return self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+
 	def getEngagerByName(self, name):
 		return self._db.engager.find_one({'name' : name})
 
