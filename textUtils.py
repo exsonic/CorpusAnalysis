@@ -112,7 +112,7 @@ def getLemmatizer():
 	else:
 		return lemmatizer
 
-def getProcessedWordList(string, lemmatizeType=NOUN):
+def getProcessedWordList(string, lemmatizeType=NOUN, isFilterWord=True):
 	if 'lemmatizer' not in globals():
 		global lemmatizer
 		lemmatizer = WordNetLemmatizer()
@@ -123,7 +123,7 @@ def getProcessedWordList(string, lemmatizeType=NOUN):
 	wordList = []
 	for word in word_tokenize(string):
 		word = lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
-		if word.isalpha() and word not in filterWordDict and len(word) > 1:
+		if word.isalpha() and (not (isFilterWord and word in filterWordDict)) and len(word) > 1:
 			wordList.append(word)
 	return wordList
 
@@ -168,7 +168,7 @@ def getAtrbWordDict():
 	return dict(zip(atrbWordList, [0] * len(atrbWordList)))
 
 def getQuotedString(string):
-	matches = findall(r'\"(.+?)\"',string)
+	matches = findall(r'"(.+?)"',string)
 	return ', '.join(matches)
 
 def getStringSurroundWordInDistance(string, word, distance):

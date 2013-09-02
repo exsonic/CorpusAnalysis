@@ -58,7 +58,7 @@ def getAllSubTagText(article, tagName):
 	tag = article.find(tagName)
 	if tag is not None:
 		for subTag in tag:
-			content += subTag.text
+			content += ('\n    ' + subTag.text)
 	return content
 
 def getCodeList(article, tagName):
@@ -135,7 +135,6 @@ def loadAllXMLtoDB(inputDir):
 	db = DBController()
 	for dirName, _, fileNames in os.walk(inputDir):
 		print(dirName)
-		articleDictList = []
 		for fileName in fileNames:
 			try:
 				if not fileName.endswith('xml'):
@@ -143,13 +142,12 @@ def loadAllXMLtoDB(inputDir):
 				fileAbsPath = getAbsPath(dirName, fileName)
 				for articleDict in parseArticleFromXML(fileAbsPath):
 					#duplication check
-					if db.isArticleDuplicate(articleDict['tailParagraph']):
-						continue
+					# if db.isArticleDuplicate(articleDict['tailParagraph']):
+					# 	continue
 					articleDict['filePath'] = fileAbsPath.split('Marshall_RA/')[1]
-					articleDictList.append(articleDict)
+					db.saveArticle(articleDict)
 			except Exception as e:
 				print e, dirName, fileName
-		db.insertArticleInBatch(articleDictList)
 
 
 ##########################################################################################################################
@@ -252,6 +250,6 @@ def loadEngagerAndCompanyToDB(filePath):
 
 
 if __name__ == '__main__':
-# 	loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
-	loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
+	loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
+	# loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
 	# loadAllRTFToDB('/Users/exsonic/Developer/Marshall_RA/0.chem_50')
