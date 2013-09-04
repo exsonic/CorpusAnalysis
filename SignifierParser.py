@@ -5,7 +5,7 @@ Created on 2013-5-9
 import re
 
 from nltk.tokenize import sent_tokenize
-from TextUtils import getWordList, getProcessedWordList, isValidSentence
+from textUtils import getWordList, getProcessedWordList, isValidSentence
 from DBController import DBController
 from Setting import *
 

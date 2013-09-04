@@ -5,7 +5,7 @@ Created on 2013-5-10
 import csv, os, re, gc
 
 from DBController import DBController
-from TextUtils import *
+from textUtils import *
 from nltk.tokenize import sent_tokenize
 from nltk.tag.stanford import NERTagger
 from threading import Thread

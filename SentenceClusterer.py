@@ -6,7 +6,7 @@ Created on 2013-5-18
 from DBController import DBController
 from sklearn.cluster import KMeans
 import numpy
-from TextUtils import getProcessedWordList
+from textUtils import getProcessedWordList
 from Setting import TOTAL_CLUSTER, BATCH_SIZE
 
 class SentenceClusterer(object):
