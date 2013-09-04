@@ -119,6 +119,9 @@ class DBController(object):
 	def getSentenceCount(self):
 		return self._db.sentence.count()
 
+	def getArticleCount(self):
+		return self._db.article.count()
+
 	def getSentenceInRange(self, startId, endId):
 		if startId < 1 or endId > self.getSentenceCount():
 			raise Exception('invalid sentence id range')
