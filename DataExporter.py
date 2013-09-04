@@ -113,45 +113,39 @@ class DataProcessorThread(Thread):
 				except Exception as e:
 					print(e)
 
-	def exportKeywordSearch(self, searchString):
-		articleList = list(self._db.getAllArticleBySearchString(searchString))
-		print(str(len(articleList)) + ' articles retrieved.')
-		if articleList:
-			with open('export/keywordSearch.csv', 'wb') as f:
-				writer = csv.writer(f)
-				attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
-				writer.writerow(attributeList)
-				for i, article in enumerate(articleList):
-					try:
-						print(i)
-						articleCompanyCode = article['filePath'].split('/')[-2]
-						articleCompany = self._db.getCompanyByCode(articleCompanyCode)
-						articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
-						articleSentenceList = []
-						if searchString.find(',') == -1:
-							pattern = re.compile(r'\b' + searchString + r'\b', re.IGNORECASE)
-							for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
-								sentenceList = sent_tokenize(paragraph)
-								for sentence in sentenceList:
-									if re.search(pattern, sentence) is not None:
-										articleSentenceList.append(sentence)
-						else:
-							regexString = ''
-							for keyword in searchString.split(','):
-								regexString += (r'\b' + keyword + r'\b.*')
-							pattern = re.compile(regexString, re.IGNORECASE)
-							for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
-								if re.search(pattern, paragraph) is not None:
-									articleSentenceList.append(paragraph)
-						lineList = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline'] , '\t'.join(articleSentenceList)]
-						encodedLineList = []
-						for part in lineList:
-							if isinstance(part, str) or isinstance(part, unicode):
-								part = part.encode('utf-8').strip()
-							encodedLineList.append(part)
-						writer.writerow(encodedLineList)
-					except Exception as e:
-						print(e)
+	def processKeywordSearch(self):
+		i = 0
+		searchString = self._args[0]
+		while True:
+			article = self._taskQueue.get()
+			self._taskQueue.task_done()
+			print(i)
+			i += 1
+			if article == END_OF_QUEUE:
+				break
+			else:
+				articleCompanyCode = article['filePath'].split('/')[-2]
+				articleCompany = self._db.getCompanyByCode(articleCompanyCode)
+				articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
+				articleSentenceList = []
+				if searchString.find(',') == -1:
+					pattern = re.compile(r'\b' + searchString + r'\b', re.IGNORECASE)
+					for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
+						sentenceList = sent_tokenize(paragraph)
+						for sentence in sentenceList:
+							if re.search(pattern, sentence) is not None:
+								articleSentenceList.append(sentence)
+				else:
+					regexString = ''
+					for keyword in searchString.split(','):
+						regexString += (r'\b' + keyword + r'\b.*')
+					pattern = re.compile(regexString, re.IGNORECASE)
+					for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
+						if re.search(pattern, paragraph) is not None:
+							articleSentenceList.append(paragraph)
+				lineList = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline'] , '\t'.join(articleSentenceList)]
+				self._resultQueue.put(lineList)
+
 
 	def processCitationBlock(self):
 		quotePattern = re.compile(r'\"[^\"]+\"')
@@ -225,9 +219,9 @@ class DataProcessorThread(Thread):
 
 
 class CSVWriterThread(Thread):
-	def __init__(self, queue, outputfilePath, attributeLineList):
+	def __init__(self, resultQueue, outputfilePath, attributeLineList):
 		super(CSVWriterThread, self).__init__()
-		self._queue = queue
+		self._resultQueue = resultQueue
 		self._outputfilePath = outputfilePath
 		self._attributeLineList = attributeLineList
 
@@ -236,8 +230,8 @@ class CSVWriterThread(Thread):
 			writer = csv.writer(f)
 			writer.writerow(self._attributeLineList)
 			while True:
-				lineList = self._queue.get()
-				self._queue.task_done()
+				lineList = self._resultQueue.get()
+				self._resultQueue.task_done()
 				if lineList == END_OF_QUEUE:
 					break
 				else:
@@ -286,7 +280,36 @@ class DataExporterMaster():
 		self._resultQueue.join()
 		writer.join()
 
+	def exportKeywordSearch(self, searchString):
+		for i in range(self._threadNumber):
+			t = DataProcessorThread(self._taskQueue, self._resultQueue, searchString)
+			t._executeFunction = t.processKeywordSearch
+			t.start()
+			self._threadList.append(t)
 
-if __name__ == '__main__':
-	master = DataExporterMaster()
-	master.exportAllCitationBlock()
+		articleList = list(self._db.getAllArticleBySearchString(searchString))
+		print(str(len(articleList)) + ' articles retrieved.')
+		for article in articleList:
+			self._taskQueue.put(article)
+
+		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
+		writer = CSVWriterThread(self._resultQueue, 'export/keywordSearch.csv', attributeList)
+		writer.start()
+
+		for i in range(self._threadNumber):
+			self._taskQueue.put(END_OF_QUEUE)
+
+		self._taskQueue.join()
+		for t in self._threadList:
+			t.join()
+		self._resultQueue.put(END_OF_QUEUE)
+		self._resultQueue.join()
+		writer.join()
+
+
+
+
+
+# if __name__ == '__main__':
+# 	master = DataExporterMaster()
+# 	master.exportAllCitationBlock()

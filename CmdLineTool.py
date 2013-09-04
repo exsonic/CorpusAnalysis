@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from DataExporter import DataExporter
+from DataExporter import DataExporterMaster
 
 if __name__ == '__main__':
 	parser = ArgumentParser()
@@ -8,9 +8,10 @@ if __name__ == '__main__':
 	                                                         'i.e. "python CmdLineTool.py -s "Professor Park"')
 
 	args = parser.parse_args()
-	keyword = args.s
+	searchString = args.s
 
-	if keyword is not None:
-		exporter = DataExporter()
-		exporter.exportKeywordSearch(keyword)
+	if searchString is not None:
+		master = DataExporterMaster()
+		master.exportKeywordSearch(searchString)
+
 
