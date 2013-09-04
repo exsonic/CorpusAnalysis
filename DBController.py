@@ -4,8 +4,8 @@ Created on 2013-5-8
 """
 
 from pymongo import MongoClient
-from textUtils import *
-from Setting import *
+from TextUtils import *
+from Settings import *
 import re
 
 class DBController(object):

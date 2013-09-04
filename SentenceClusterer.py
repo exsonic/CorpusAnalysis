@@ -6,8 +6,8 @@ Created on 2013-5-18
 from DBController import DBController
 from sklearn.cluster import KMeans
 import numpy
-from textUtils import getProcessedWordList
-from Setting import TOTAL_CLUSTER, BATCH_SIZE
+from TextUtils import getProcessedWordList
+from Settings import TOTAL_CLUSTER, BATCH_SIZE
 
 class SentenceClusterer(object):
     def __init__(self):

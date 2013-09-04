@@ -5,7 +5,7 @@ Created on 2013-5-8
 import os, shutil, re
 from pyth.plugins.rtf15.reader import Rtf15Reader
 from pyth.plugins.plaintext.writer import PlaintextWriter
-from Setting import *
+from Settings import *
 from xml.etree import ElementTree
 from dateutil import parser
 from DBController import DBController
