@@ -4,9 +4,7 @@ Created on 2013-5-8
 """
 
 from pymongo import MongoClient
-from TextUtils import *
-from Settings import *
-import re
+import re, itertools
 
 class DBController(object):
 	def __init__(self):
@@ -85,14 +83,27 @@ class DBController(object):
 	def getAllArticleBySearchString(self, searchString):
 		if searchString is None:
 			return []
-		elif searchString.find(',') != -1:
-			regexString = ''
-			for keyword in searchString.split(','):
-				regexString += (r'\b' + keyword + r'\b.*')
 		else:
-			regexString = r'\b' + searchString + r'\b'
-		pattern = re.compile(regexString, re.IGNORECASE)
-		return self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+			if searchString.find(',') != -1:
+				articleList = []
+				regexString = ''
+				for keywordTuple in itertools.permutations([keyword.strip() for keyword in searchString.split(',')]):
+					for keyword in keywordTuple:
+						regexString += (r'\b' + keyword + r'\b.*')
+					pattern = re.compile(regexString, re.IGNORECASE)
+					articleList += list(self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False))
+
+			elif searchString.find(r'|') != -1:
+				keywordList = [keyword.strip() for keyword in searchString.split('|')]
+
+				regexString = '|'.join([(r'\b' + keyword + r'\b') for keyword in keywordList])
+				pattern = re.compile(regexString, re.IGNORECASE)
+				articleList = self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+			else:
+				regexString = r'\b' + searchString + r'\b'
+				pattern = re.compile(regexString, re.IGNORECASE)
+				articleList = self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+			return articleList
 
 	def getEngagerByName(self, name):
 		return self._db.engager.find_one({'name' : name})

@@ -252,8 +252,8 @@ class DataExporterMaster():
 
 	def exportAllCitationBlock(self):
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engagerWord']
-		articleCount = 1000
-		batchSize = 200
+		articleCount = self._db.getArticleCount()
+		batchSize = 400
 
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue)
@@ -288,8 +288,8 @@ class DataExporterMaster():
 			t.start()
 			self._threadList.append(t)
 
-		articleList = list(self._db.getAllArticleBySearchString(searchString))
-		print(str(len(articleList)) + ' articles retrieved.')
+		articleList = self._db.getAllArticleBySearchString(searchString)
+		#it's cursor here!!
 		for article in articleList:
 			self._taskQueue.put(article)
 
@@ -311,6 +311,6 @@ class DataExporterMaster():
 
 
 
-# if __name__ == '__main__':
-# 	master = DataExporterMaster()
-# 	master.exportAllCitationBlock()
+if __name__ == '__main__':
+	master = DataExporterMaster()
+	master.exportAllCitationBlock()
