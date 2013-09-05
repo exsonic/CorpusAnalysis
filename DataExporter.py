@@ -134,6 +134,7 @@ class DataProcessorThread(Thread):
 						sentenceList = sent_tokenize(paragraph)
 						for sentence in sentenceList:
 							if re.search(pattern, sentence) is not None:
+								sentence.encode('utf-8').strip()
 								articleSentenceList.append(sentence)
 				else:
 					regexString = ''
