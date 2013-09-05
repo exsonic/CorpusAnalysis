@@ -240,6 +240,8 @@ class CSVWriterThread(Thread):
 						writer.writerow(lineList)
 					except Exception as e:
 						print(e)
+						encodedLineList = [part.encode('ascii', 'ignore') for part in lineList]
+						writer.writerow(encodedLineList)
 
 class DataExporterMaster():
 	def __init__(self):
@@ -288,9 +290,9 @@ class DataExporterMaster():
 			t.start()
 			self._threadList.append(t)
 
-		articleList = self._db.getAllArticleBySearchString(searchString)
+		articleListCursor = self._db.getAllArticleBySearchString(searchString)
 		#it's cursor here!!
-		for article in articleList:
+		for article in articleListCursor:
 			self._taskQueue.put(article)
 
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
