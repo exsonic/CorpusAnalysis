@@ -3,6 +3,7 @@ Created on 2013-5-10
 @author: Bobi Pu, bobi.pu@usc.edu
 """
 import csv, os, re, gc
+import time
 
 from DBController import DBController
 from TextUtils import *
@@ -21,8 +22,6 @@ class DataProcessorThread(Thread):
 		self._executeFunction = None
 
 		self._db = DBController()
-		self._NERTagger = NERTagger('stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz',
-		                           'stanford-ner/stanford-ner.jar')
 		self._citeWordList = getWordList(CITE_WORD)
 		if not os.path.exists('export/'):
 			os.makedirs('export/')
@@ -118,7 +117,6 @@ class DataProcessorThread(Thread):
 		searchString = self._args[0]
 		while True:
 			article = self._taskQueue.get()
-			self._taskQueue.task_done()
 			print(i)
 			i += 1
 			if article == END_OF_QUEUE:
@@ -128,23 +126,23 @@ class DataProcessorThread(Thread):
 				articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 				articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
 				articleSentenceList = []
-				if searchString.find(',') == -1:
-					pattern = re.compile(r'\b' + searchString + r'\b', re.IGNORECASE)
-					for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
-						sentenceList = sent_tokenize(paragraph)
-						for sentence in sentenceList:
-							if re.search(pattern, sentence) is not None:
-								sentence.encode('utf-8').strip()
-								articleSentenceList.append(sentence)
-				else:
-					regexString = ''
-					for keyword in searchString.split(','):
-						regexString += (r'\b' + keyword + r'\b.*')
-					pattern = re.compile(regexString, re.IGNORECASE)
+
+				#here, use '|' to combine regex is OK, because sentence is short, will not reduce the performance that much.
+				#But in DB search, use iterative way.
+				pattern = getPatternByKeywordSearchString(searchString)
+
+				#on sentence level first, if can't find, go to paragraph level.
+				for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
+					sentenceList = sent_tokenize(paragraph)
+					for sentence in sentenceList:
+						if re.search(pattern, sentence) is not None:
+							articleSentenceList.append(sentence.encode('utf-8').strip())
+				if not articleSentenceList:
+					#search on paragraph level
 					for paragraph in [article['headline'], article['byline'], article['leadParagraph'], article['tailParagraph']]:
 						if re.search(pattern, paragraph) is not None:
-							articleSentenceList.append(paragraph)
-				lineList = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline'] , '\t'.join(articleSentenceList)]
+							articleSentenceList.append(paragraph.encode('utf-8').strip())
+				lineList = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'].strip(), article['byline'].strip(), article['headline'].strip(), '\t'.join(articleSentenceList)]
 				self._resultQueue.put(lineList)
 
 
@@ -160,7 +158,6 @@ class DataProcessorThread(Thread):
 
 		while True:
 			article = self._taskQueue.get()
-			self._taskQueue.task_done()
 			print(i)
 			i += 1
 			if article == END_OF_QUEUE:
@@ -190,7 +187,8 @@ class DataProcessorThread(Thread):
 		#use name entity tagger
 		actorList = []
 		orgnizationList = []
-		tagTupleList = self._NERTagger.tag(sentence.split())
+		tagger = NERTagger('stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz', 'stanford-ner/stanford-ner.jar')
+		tagTupleList = tagger.tag(sentence.split())
 		inQuoteFlag = False
 		lastTag = ''
 		wordList = []
@@ -220,19 +218,19 @@ class DataProcessorThread(Thread):
 
 
 class CSVWriterThread(Thread):
-	def __init__(self, resultQueue, outputfilePath, attributeLineList):
+	def __init__(self, resultQueue, outputfilePath, attributeLineList, mode='wb'):
 		super(CSVWriterThread, self).__init__()
 		self._resultQueue = resultQueue
 		self._outputfilePath = outputfilePath
 		self._attributeLineList = attributeLineList
+		self._writeMode = mode
 
 	def run(self):
-		with open(self._outputfilePath, 'wb') as f:
+		with open(self._outputfilePath, self._writeMode) as f:
 			writer = csv.writer(f)
 			writer.writerow(self._attributeLineList)
 			while True:
 				lineList = self._resultQueue.get()
-				self._resultQueue.task_done()
 				if lineList == END_OF_QUEUE:
 					break
 				else:
@@ -240,37 +238,41 @@ class CSVWriterThread(Thread):
 						writer.writerow(lineList)
 					except Exception as e:
 						print(e)
-						encodedLineList = [part.encode('ascii', 'ignore') for part in lineList]
-						writer.writerow(encodedLineList)
+						# encodedLineList = [(part.encode('ascii', 'ignore') if (isinstance(part, str) or isinstance(part, unicode)) else part) for part in lineList]
+						# writer.writerow(encodedLineList)
 
 class DataExporterMaster():
 	def __init__(self):
 		self._resultQueue = Queue()
 		self._taskQueue = Queue()
 		self._db = DBController()
-		self._threadNumber = 4
+		self._threadNumber = 3
 		self._threadList = []
 
 
 	def exportAllCitationBlock(self):
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engagerWord']
-		articleCount = self._db.getArticleCount()
-		batchSize = 400
+		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='a')
+		writer.start()
 
+		batchSize = 300
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue)
 			t._executeFunction = t.processCitationBlock
 			t.start()
 			self._threadList.append(t)
 
-		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList)
-		writer.start()
 
-		for i in xrange(0, articleCount, batchSize):
-			articleBatch = self._db.getAllArticle()[i : i + batchSize]
+		while True:
+			articleBatch = self._db.getAllUnprocessedArticle(batchSize)
+			if articleBatch is None:
+				break
 			for article in articleBatch:
+				article['processed'] = True
+				self._db.saveArticle(article)
 				self._taskQueue.put(article)
 			self._taskQueue.join()
+			time.sleep(30)
 			print('################')
 
 		for i in range(self._threadNumber):
@@ -284,6 +286,10 @@ class DataExporterMaster():
 		writer.join()
 
 	def exportKeywordSearch(self, searchString):
+		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
+		writer = CSVWriterThread(self._resultQueue, 'export/keywordSearch.csv', attributeList)
+		writer.start()
+
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue, searchString)
 			t._executeFunction = t.processKeywordSearch
@@ -295,22 +301,13 @@ class DataExporterMaster():
 		for article in articleListCursor:
 			self._taskQueue.put(article)
 
-		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
-		writer = CSVWriterThread(self._resultQueue, 'export/keywordSearch.csv', attributeList)
-		writer.start()
-
 		for i in range(self._threadNumber):
 			self._taskQueue.put(END_OF_QUEUE)
 
-		self._taskQueue.join()
 		for t in self._threadList:
 			t.join()
 		self._resultQueue.put(END_OF_QUEUE)
-		self._resultQueue.join()
 		writer.join()
-
-
-
 
 
 if __name__ == '__main__':

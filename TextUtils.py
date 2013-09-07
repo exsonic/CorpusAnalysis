@@ -2,6 +2,7 @@
 Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
+import re
 
 from Settings import *
 from nltk.tokenize import word_tokenize
@@ -10,6 +11,7 @@ from math import log10
 from collections import Counter
 from copy import deepcopy
 from re import findall
+import itertools
 
 def isValidSentence(string):
 		if string.find('=') != -1:
@@ -182,3 +184,22 @@ def getStringSurroundWordInDistance(string, word, distance):
 	except:
 		pass
 	return outputString
+
+def getPatternByKeywordSearchString(searchString):
+	if searchString is None or len(searchString) == 0:
+		return None
+	else:
+		if searchString.find(',') != -1:
+			keywordList = [keyword.strip() for keyword in searchString.split(',')]
+			permutationRegexStringList = []
+			for keywordTuple in itertools.permutations(keywordList):
+				tupleRegexString = r'\b' + r'\b[^\.]*\b'.join(keywordTuple) + r'\b'
+				permutationRegexStringList.append(tupleRegexString)
+			regexString = r'|'.join(permutationRegexStringList)
+		elif searchString.find(r'|') != -1:
+			keywordList = [keyword.strip() for keyword in searchString.split('|')]
+			regexString = r'\b(' + '|'.join(keywordList) + r')\b'
+		else:
+			regexString = r'\b' + searchString + r'\b'
+
+		return re.compile(regexString, re.IGNORECASE)

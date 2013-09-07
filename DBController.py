@@ -2,9 +2,11 @@
 Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
+import itertools
 
 from pymongo import MongoClient
-import re, itertools
+import re
+from TextUtils import getPatternByKeywordSearchString
 
 class DBController(object):
 	def __init__(self):
@@ -85,25 +87,27 @@ class DBController(object):
 			return []
 		else:
 			if searchString.find(',') != -1:
-				articleList = []
-				regexString = ''
-				for keywordTuple in itertools.permutations([keyword.strip() for keyword in searchString.split(',')]):
-					for keyword in keywordTuple:
-						regexString += (r'\b' + keyword + r'\b.*')
+				#to boost processing speed, use iterative way
+				keywordList = [keyword.strip() for keyword in searchString.split(',')]
+				articleDict = {}
+				for keywordTuple in itertools.permutations(keywordList):
+					regexString = r'\b' + r'\b[^\.]*\b'.join(keywordTuple) + r'\b'
 					pattern = re.compile(regexString, re.IGNORECASE)
-					articleList += list(self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False))
-
-			elif searchString.find(r'|') != -1:
-				keywordList = [keyword.strip() for keyword in searchString.split('|')]
-
-				regexString = '|'.join([(r'\b' + keyword + r'\b') for keyword in keywordList])
-				pattern = re.compile(regexString, re.IGNORECASE)
-				articleList = self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+					for article in self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False):
+						articleDict[article['_id']] = article
+				return articleDict.itervalues()
+			elif searchString.find('|') != -1:
+				#to boost processing speed, use iterative way
+				articleDict = {}
+				for keyword in searchString.split('|'):
+					regexString = r'\b' + keyword.strip() + r'\b'
+					pattern = re.compile(regexString, re.IGNORECASE)
+					for article in self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False):
+						articleDict[article['_id']] = article
+				return articleDict.itervalues()
 			else:
-				regexString = r'\b' + searchString + r'\b'
-				pattern = re.compile(regexString, re.IGNORECASE)
-				articleList = self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
-			return articleList
+				pattern = getPatternByKeywordSearchString(searchString)
+				return self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
 
 	def getEngagerByName(self, name):
 		return self._db.engager.find_one({'name' : name})
@@ -167,3 +171,9 @@ class DBController(object):
 
 	def saveSentence(self, sentenceDict):
 		self._db.sentence.save(sentenceDict)
+
+
+	#Only for output citation block
+	def getAllUnprocessedArticle(self, limit=0):
+		return self._db.article.find({'processed' : {'$exists' : False}}, timeout=False).limit(limit)
+
