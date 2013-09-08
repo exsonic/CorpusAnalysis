@@ -6,7 +6,6 @@ import csv, os, re
 from DBController import DBController
 from TextUtils import *
 from nltk.tokenize import sent_tokenize
-from nltk.tag.stanford import NERTagger
 from threading import Thread
 from Queue import Queue
 
