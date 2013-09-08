@@ -2,9 +2,7 @@
 Created on 2013-5-10
 @author: Bobi Pu, bobi.pu@usc.edu
 """
-import csv, os, re, gc
-import time
-
+import csv, os, re
 from DBController import DBController
 from TextUtils import *
 from nltk.tokenize import sent_tokenize
@@ -26,8 +24,9 @@ class DataProcessorThread(Thread):
 		if not os.path.exists('export/'):
 			os.makedirs('export/')
 
-	#sentence collection is all the sentence
 	def exportSentenceAnalysis(self):
+		#sentence collection is all the sentence
+		#deprecated, need to refactor and apply queue
 		with open('export/sentence.csv', 'wb') as f:
 			writer = csv.writer(f)
 			sentences = self._db.getAllSentence()
@@ -72,6 +71,7 @@ class DataProcessorThread(Thread):
 					print(e)
 
 	def exportArticleAnalysis(self):
+		#deprecated
 		with open('export/article.csv', 'wb') as f:
 			writer = csv.writer(f)
 			articleList = list(self._db.getAllArticle())
@@ -113,12 +113,9 @@ class DataProcessorThread(Thread):
 					print(e)
 
 	def processKeywordSearch(self):
-		i = 0
 		searchString = self._args[0]
 		while True:
 			article = self._taskQueue.get()
-			print(i)
-			i += 1
 			if article == END_OF_QUEUE:
 				break
 			else:
@@ -154,64 +151,78 @@ class DataProcessorThread(Thread):
 		engagerNamePattern = re.compile(r'|'.join(engagerNamePatternStringList), re.IGNORECASE)
 		citeWordPattern = re.compile(r'|'.join(citeWordPatternStringList), re.IGNORECASE)
 
-		i = 0
-
 		while True:
-			article = self._taskQueue.get()
-			print(i)
-			i += 1
-			if article == END_OF_QUEUE:
+			#process in batch
+			articleBatch = self._taskQueue.get()
+			if articleBatch == END_OF_QUEUE:
+				self._taskQueue.task_done()
 				break
 			else:
-				articleCompanyCode = article['filePath'].split('/')[-2]
-				articleCompany = self._db.getCompanyByCode(articleCompanyCode)
-				articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
-				articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline']]
+				lineListBatch = []
+				toProcessSentenceBatch = []
+				for article in articleBatch:
+					article['processed'] = True
+					self._db.saveArticle(article)
+					articleCompanyCode = article['filePath'].split('/')[-2]
+					articleCompany = self._db.getCompanyByCode(articleCompanyCode)
+					articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
+					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline']]
 
-				for paragraph in [article['leadParagraph'], article['tailParagraph']]:
-					quotedStringList = re.findall(quotePattern, paragraph)
-					if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5:
-						sentenceList = sent_tokenize(paragraph)
-						for sentence in sentenceList:
-							sentence = sentence.encode('utf-8')
-							quotedStringList = re.findall(quotePattern, sentence)
-							citeWordList = re.findall(citeWordPattern, sentence)
-							if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5 and citeWordList:
-								actorAndOrgList = self.processCiteSentence(sentence)
-								if actorAndOrgList:
-									engagerNameList = re.findall(engagerNamePattern, sentence)
-									lineList = articleLineListPart + [sentence, ' '.join(quotedStringList), ' '.join(citeWordList)] + actorAndOrgList + [' '.join(engagerNameList)]
-									self._resultQueue.put(lineList)
+					for paragraph in [article['leadParagraph'], article['tailParagraph']]:
+						quotedStringList = re.findall(quotePattern, paragraph)
+						if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5:
+							sentenceList = sent_tokenize(paragraph)
+							for sentence in sentenceList:
+								sentence = sentence.encode('utf-8')
+								quotedStringList = re.findall(quotePattern, sentence)
+								citeWordList = re.findall(citeWordPattern, sentence)
+								if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5 and citeWordList:
+									lineList = articleLineListPart + [sentence, ' '.join(quotedStringList), ' '.join(citeWordList)]
+									lineListBatch.append(lineList)
+									toProcessSentenceBatch.append(sentence)
+				actorAndOrgListBatch = self.processCiteSentenceInBatch(toProcessSentenceBatch)
+				for i, actorAndOrgList in enumerate(actorAndOrgListBatch):
+					if actorAndOrgList is not None:
+						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][8])
+						lineListBatch[i] += (actorAndOrgList + [' '.join(engagerNameList)])
+						self._resultQueue.put(lineListBatch[i])
+				self._taskQueue.task_done()
 
-	def processCiteSentence(self, sentence):
-		#use name entity tagger
-		actorList = []
-		orgnizationList = []
-		tagger = NERTagger('stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz', 'stanford-ner/stanford-ner.jar')
-		tagTupleList = tagger.tag(sentence.split())
-		inQuoteFlag = False
-		lastTag = ''
-		wordList = []
+	def processCiteSentenceInBatch(self, sentenceBatch):
+		#use senna name entity tagger, it fast!!
+		with open('temp/input.txt', 'wb') as f:
+			f.write(' *** '.join(sentenceBatch))
+		os.system('./senna/senna -path senna/ -ner <temp/input.txt> temp/output.txt')
+		with open('temp/output.txt', 'r') as f:
+			tagTupleList = [[word.strip().split('-')[-1] if i ==1  else word.strip() for i, word in enumerate(line.split())] for line in f.readlines() if line.split()]
+
+		actorAndOrgListBatch = []
+		actorList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
 		for i in range(len(tagTupleList)):
-			if tagTupleList[i][0] == '\'\'' or tagTupleList[i][0] == '``' or tagTupleList[i][0] == '\"\"':
+			if tagTupleList[i][0] == '***' or i == len(tagTupleList) - 1:
+				#end of one sentence
+				if not actorList and not orgnizationList:
+					actorAndOrgListBatch.append(None)
+				else:
+					actorAndOrgListBatch.append([', '.join(actorList), ', '.join(orgnizationList)])
+				actorList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
+
+			if tagTupleList[i][0] == '\"':
 				inQuoteFlag = 1 - inQuoteFlag
 				if not inQuoteFlag:
 					del wordList[:]
 			else:
 				if not inQuoteFlag:
 					if tagTupleList[i][1] != lastTag:
-						if lastTag == 'PERSON':
+						if lastTag == 'PER':
 							actorList.append(' '.join(wordList))
-						elif lastTag == 'ORGANIZATION':
+						elif lastTag == 'ORG':
 							orgnizationList.append(' '.join(wordList))
 						wordList = [tagTupleList[i][0]]
 						lastTag = tagTupleList[i][1]
 					else:
 						wordList.append(tagTupleList[i][0])
-		if not actorList and not orgnizationList:
-			return None
-		else:
-			return [', '.join(actorList), ', '.join(orgnizationList)]
+		return actorAndOrgListBatch
 
 	def run(self):
 		self._executeFunction()
@@ -226,54 +237,60 @@ class CSVWriterThread(Thread):
 		self._writeMode = mode
 
 	def run(self):
+		i = 0
 		with open(self._outputfilePath, self._writeMode) as f:
 			writer = csv.writer(f)
 			writer.writerow(self._attributeLineList)
 			while True:
 				lineList = self._resultQueue.get()
+				print(i)
+				i += 1
 				if lineList == END_OF_QUEUE:
+					self._resultQueue.task_done()
 					break
 				else:
 					try:
 						writer.writerow(lineList)
 					except Exception as e:
 						print(e)
-						# encodedLineList = [(part.encode('ascii', 'ignore') if (isinstance(part, str) or isinstance(part, unicode)) else part) for part in lineList]
-						# writer.writerow(encodedLineList)
+					finally:
+						self._resultQueue.task_done()
 
 class DataExporterMaster():
 	def __init__(self):
 		self._resultQueue = Queue()
 		self._taskQueue = Queue()
 		self._db = DBController()
-		self._threadNumber = 3
+		self._threadNumber = 4
 		self._threadList = []
 
 
 	def exportAllCitationBlock(self):
+		#single thread is enough
+		self._threadNumber = 1
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engagerWord']
 		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='a')
 		writer.start()
 
-		batchSize = 300
+		batchSize = 1000
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue)
 			t._executeFunction = t.processCitationBlock
 			t.start()
 			self._threadList.append(t)
 
-
 		while True:
-			articleBatch = self._db.getAllUnprocessedArticle(batchSize)
-			if articleBatch is None:
-				break
-			for article in articleBatch:
-				article['processed'] = True
-				self._db.saveArticle(article)
-				self._taskQueue.put(article)
+			isDone = False
+			for i in range(self._threadNumber):
+				articleBatch = list(self._db.getAllUnprocessedArticle(batchSize))
+				if articleBatch is None or not articleBatch:
+					isDone = True
+					break
+				self._taskQueue.put(articleBatch)
 			self._taskQueue.join()
-			time.sleep(30)
 			print('################')
+			if isDone:
+				break
 
 		for i in range(self._threadNumber):
 			self._taskQueue.put(END_OF_QUEUE)
@@ -286,6 +303,7 @@ class DataExporterMaster():
 		writer.join()
 
 	def exportKeywordSearch(self, searchString):
+		self._threadNumber = 4
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence']
 		writer = CSVWriterThread(self._resultQueue, 'export/keywordSearch.csv', attributeList)
 		writer.start()
