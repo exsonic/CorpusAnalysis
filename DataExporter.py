@@ -147,11 +147,10 @@ class DataProcessorThread(Thread):
 
 	def processCitationBlock(self):
 		quotePattern = re.compile(r'\"[^\"]+\"')
-		engagerNamePatternStringList = [(r'\b' + engager['name'] + r'\b') for engager in self._db.getAllEngager()]
 		citeWordPatternStringList = [(r'\b' + citeWord + r'\b') for citeWord in self._citeWordList]
 
 		companyCEODict = self._db.getAllCompanyCEODict()
-		engagerNamePattern = re.compile(r'|'.join(engagerNamePatternStringList), re.IGNORECASE)
+		engagerNamePattern = re.compile(r'|'.join(['CEO', 'analyst', 'executive']), re.IGNORECASE)
 		citeWordPattern = re.compile(r'|'.join(citeWordPatternStringList), re.IGNORECASE)
 
 		while True:
@@ -166,35 +165,34 @@ class DataProcessorThread(Thread):
 				#add byline_cleaned in articleDict
 				self.processBylineInBatch(articleBatch)
 				for article in articleBatch:
-					article['processed'] = True
-					self._db.saveArticle(article)
+					self._db.setArticleProcessed(article['_id'])
 					articlePathPartList = article['filePath'].split('/')
 					articleCompanyCode = articlePathPartList[-3] if articlePathPartList[-2] == 'a' else articlePathPartList[-2]
 					articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 					articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
-					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['byline_cleaned'], article['headline']]
+					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'].strip(), article['byline'].strip(), article['byline_cleaned'], article['headline'].strip()]
 
 					for paragraph in [article['leadParagraph'], article['tailParagraph']]:
 						quotedStringList = re.findall(quotePattern, paragraph)
 						if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5:
 							sentenceList = sent_tokenize(paragraph)
 							for sentence in sentenceList:
-								sentence = sentence.encode('utf-8')
 								quotedStringList = re.findall(quotePattern, sentence)
 								citeWordList = re.findall(citeWordPattern, sentence)
 								if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5 and citeWordList:
-									lineList = articleLineListPart + [sentence, ' '.join(quotedStringList), ' '.join(citeWordList)]
+									lineList = articleLineListPart + [sentence, '. '.join(quotedStringList), ', '.join(citeWordList)]
 									lineListBatch.append(lineList)
 									toProcessSentenceBatch.append(sentence)
 				actorAndOrgListBatch = self.processCiteSentenceInBatch(toProcessSentenceBatch)
 				for i, actorAndOrgList in enumerate(actorAndOrgListBatch):
 					if actorAndOrgList is not None:
-						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][8])
+						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][9])
 						FCEO = 0
-						for engagerName in engagerNameList:
-							if articleCompanyCode in companyCEODict and companyCEODict[articleCompanyCode].find(engagerName) != -1:
-								FCEO = 1
-								break
+						articleCompanyCode = lineListBatch[i][0]
+						for name in actorAndOrgList[0].split(', '):
+							for namePart in name.split():
+								if articleCompanyCode in companyCEODict and companyCEODict[articleCompanyCode].find(namePart) != -1:
+									FCEO = 1
 						lineListBatch[i] += (actorAndOrgList + [' '.join(engagerNameList)])
 						lineListBatch[i].append(FCEO)
 						self._resultQueue.put(lineListBatch[i])
@@ -202,7 +200,9 @@ class DataProcessorThread(Thread):
 
 	def getNERTaggedTupleListFromSentence(self, sentence):
 		#use senna name entity tagger, it fast!!
-		with open('temp/input.txt', 'wb') as f:
+
+		sentence = unicode(sentence).encode('utf-8', 'ignore')
+		with open('temp/input.txt', 'w') as f:
 			f.write(sentence)
 		os.system('./senna/senna -path senna/ -ner <temp/input.txt> temp/output.txt')
 		with open('temp/output.txt', 'r') as f:
@@ -210,14 +210,12 @@ class DataProcessorThread(Thread):
 		return tagTupleList
 
 	def processBylineInBatch(self, articleBatch):
-		tagTupleList = self.getNERTaggedTupleListFromSentence(' *** '.join([article['byline'] for article in articleBatch]))
+		#use '.' to replace '' of byline, because if the last sentence byline is '', it will not be add to concatenated string.
+		tagTupleList = self.getNERTaggedTupleListFromSentence(' ****** '.join([article['byline'] if article['byline'] else 'null.' for article in articleBatch]))
 
 		personList, lastTag, wordList  = [], '', []
+		articleIndex = 0
 		for i in range(len(tagTupleList)):
-			if tagTupleList[i][0] == '***' or i == len(tagTupleList) - 1:
-				#end of one sentence
-				articleBatch[i]['byline_cleaned'] = ', '.join(personList) if personList else ''
-				personList, lastTag, wordList  = [], '', []
 			if tagTupleList[i][1] != lastTag:
 				if lastTag == 'PER':
 					personList.append(' '.join(wordList))
@@ -226,20 +224,25 @@ class DataProcessorThread(Thread):
 			else:
 				wordList.append(tagTupleList[i][0])
 
+			if tagTupleList[i][0].find('****') != -1 or i == len(tagTupleList) - 1:
+				#end of one sentence
+				articleBatch[articleIndex]['byline_cleaned'] = ', '.join(personList) if personList else ''
+				personList, lastTag, wordList = [], '', []
+				articleIndex = articleIndex + 1 if i != len(tagTupleList) - 1 else articleIndex
+				if articleIndex >= len(articleBatch):
+					return
+
+		while articleIndex < len(articleBatch) :
+			articleBatch[articleIndex]['byline_cleaned'] = ''
+			articleIndex += 1
+
+
 	def processCiteSentenceInBatch(self, sentenceBatch):
-		tagTupleList = self.getNERTaggedTupleListFromSentence(' *** '.join(sentenceBatch))
+		tagTupleList = self.getNERTaggedTupleListFromSentence(' ****** '.join(sentenceBatch))
 
 		personAndOrgListBatch = []
 		personList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
 		for i in range(len(tagTupleList)):
-			if tagTupleList[i][0] == '***' or i == len(tagTupleList) - 1:
-				#end of one sentence
-				if not personList and not orgnizationList:
-					personAndOrgListBatch.append(None)
-				else:
-					personAndOrgListBatch.append([', '.join(personList), ', '.join(orgnizationList)])
-				personList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
-
 			if tagTupleList[i][0] == '\"':
 				inQuoteFlag = 1 - inQuoteFlag
 				if not inQuoteFlag:
@@ -255,6 +258,15 @@ class DataProcessorThread(Thread):
 						lastTag = tagTupleList[i][1]
 					else:
 						wordList.append(tagTupleList[i][0])
+
+			if tagTupleList[i][0].find('****') != -1 or i == len(tagTupleList) - 1:
+				#end of one sentence
+				if not personList and not orgnizationList:
+					personAndOrgListBatch.append(None)
+				else:
+					personAndOrgListBatch.append([', '.join(personList), ', '.join(orgnizationList)])
+				personList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
+
 		return personAndOrgListBatch
 
 	def run(self):
@@ -262,7 +274,7 @@ class DataProcessorThread(Thread):
 
 
 class CSVWriterThread(Thread):
-	def __init__(self, resultQueue, outputfilePath, attributeLineList, mode='wb'):
+	def __init__(self, resultQueue, outputfilePath, attributeLineList, mode='w'):
 		super(CSVWriterThread, self).__init__()
 		self._resultQueue = resultQueue
 		self._outputfilePath = outputfilePath
@@ -302,9 +314,10 @@ class DataExporterMaster():
 		#single thread is enough
 		self._threadNumber = 1
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'byline_cleaned', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engager', 'FCEO']
-		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='a')
+		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='w')
 		writer.start()
 
+		#must set to 100, otherwise there's bug
 		batchSize = 100
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue)

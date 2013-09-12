@@ -177,10 +177,12 @@ class DBController(object):
 		companyCEODict = {}
 		for company in self.getAllCompany():
 			CEOIdList = set(company['CEO'].itervalues())
-			companyCEODict[company['code']] = ','.join([self.getEngagerById(CEOId)['name'] for CEOId in CEOIdList])
+			companyCEODict[company['code']] = ', '.join([self.getEngagerById(CEOId)['name'] for CEOId in CEOIdList])
 		return companyCEODict
 
+	def setArticleProcessed(self, articleId):
+		self._db.article.update({'_id' : articleId}, {'$set' : {'processed' : True}})
 
 	def getAllUnprocessedArticle(self, limit=0):
-		return self._db.article.find({'processed' : {'$exists' : False}}, timeout=False).limit(limit)
+		return self._db.article.find({'processed' : False}, timeout=False).limit(limit)
 
