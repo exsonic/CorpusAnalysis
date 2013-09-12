@@ -172,8 +172,15 @@ class DBController(object):
 	def saveSentence(self, sentenceDict):
 		self._db.sentence.save(sentenceDict)
 
-
 	#Only for output citation block
+	def getAllCompanyCEODict(self):
+		companyCEODict = {}
+		for company in self.getAllCompany():
+			CEOIdList = set(company['CEO'].itervalues())
+			companyCEODict[company['code']] = ','.join([self.getEngagerById(CEOId)['name'] for CEOId in CEOIdList])
+		return companyCEODict
+
+
 	def getAllUnprocessedArticle(self, limit=0):
 		return self._db.article.find({'processed' : {'$exists' : False}}, timeout=False).limit(limit)
 

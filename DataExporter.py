@@ -41,7 +41,8 @@ class DataProcessorThread(Thread):
 					if sentence['articleId'] not in articleDict:
 						articleDict[sentence['articleId']] = self._db.getArticleById(sentence['articleId'])
 					article = articleDict[sentence['articleId']]
-					articleCompanyCode = article['filePath'].split('/')[-2]
+					articlePathPartList = article['filePath'].split('/')
+					articleCompanyCode = articlePathPartList[-3] if articlePathPartList[-2] == 'a' else articlePathPartList[-2]
 					articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 					articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
 					sentenceCompanyList = [self._db.getCompanyById(companyId) for companyId in sentence['company']]
@@ -81,7 +82,8 @@ class DataProcessorThread(Thread):
 			for i, article in enumerate(articleList):
 				try:
 					print(i)
-					articleCompanyCode = article['filePath'].split('/')[-2]
+					articlePathPartList = article['filePath'].split('/')
+					articleCompanyCode = articlePathPartList[-3] if articlePathPartList[-2] == 'a' else articlePathPartList[-2]
 					articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 					articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
 					companyCodeList = [''] * ARTICLE_EXPORT_CODE_SIZE
@@ -118,7 +120,8 @@ class DataProcessorThread(Thread):
 			if article == END_OF_QUEUE:
 				break
 			else:
-				articleCompanyCode = article['filePath'].split('/')[-2]
+				articlePathPartList = article['filePath'].split('/')
+				articleCompanyCode = articlePathPartList[-3] if articlePathPartList[-2] == 'a' else articlePathPartList[-2]
 				articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 				articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
 				articleSentenceList = []
@@ -147,6 +150,7 @@ class DataProcessorThread(Thread):
 		engagerNamePatternStringList = [(r'\b' + engager['name'] + r'\b') for engager in self._db.getAllEngager()]
 		citeWordPatternStringList = [(r'\b' + citeWord + r'\b') for citeWord in self._citeWordList]
 
+		companyCEODict = self._db.getAllCompanyCEODict()
 		engagerNamePattern = re.compile(r'|'.join(engagerNamePatternStringList), re.IGNORECASE)
 		citeWordPattern = re.compile(r'|'.join(citeWordPatternStringList), re.IGNORECASE)
 
@@ -159,13 +163,16 @@ class DataProcessorThread(Thread):
 			else:
 				lineListBatch = []
 				toProcessSentenceBatch = []
+				#add byline_cleaned in articleDict
+				self.processBylineInBatch(articleBatch)
 				for article in articleBatch:
 					article['processed'] = True
 					self._db.saveArticle(article)
-					articleCompanyCode = article['filePath'].split('/')[-2]
+					articlePathPartList = article['filePath'].split('/')
+					articleCompanyCode = articlePathPartList[-3] if articlePathPartList[-2] == 'a' else articlePathPartList[-2]
 					articleCompany = self._db.getCompanyByCode(articleCompanyCode)
 					articleCompanyName = articleCompanyCode if articleCompany is None else articleCompany['name']
-					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['headline']]
+					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'], article['byline'], article['byline_cleaned'], article['headline']]
 
 					for paragraph in [article['leadParagraph'], article['tailParagraph']]:
 						quotedStringList = re.findall(quotePattern, paragraph)
@@ -183,28 +190,55 @@ class DataProcessorThread(Thread):
 				for i, actorAndOrgList in enumerate(actorAndOrgListBatch):
 					if actorAndOrgList is not None:
 						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][8])
+						FCEO = 0
+						for engagerName in engagerNameList:
+							if articleCompanyCode in companyCEODict and companyCEODict[articleCompanyCode].find(engagerName) != -1:
+								FCEO = 1
+								break
 						lineListBatch[i] += (actorAndOrgList + [' '.join(engagerNameList)])
+						lineListBatch[i].append(FCEO)
 						self._resultQueue.put(lineListBatch[i])
 				self._taskQueue.task_done()
 
-	def processCiteSentenceInBatch(self, sentenceBatch):
+	def getNERTaggedTupleListFromSentence(self, sentence):
 		#use senna name entity tagger, it fast!!
 		with open('temp/input.txt', 'wb') as f:
-			f.write(' *** '.join(sentenceBatch))
+			f.write(sentence)
 		os.system('./senna/senna -path senna/ -ner <temp/input.txt> temp/output.txt')
 		with open('temp/output.txt', 'r') as f:
 			tagTupleList = [[word.strip().split('-')[-1] if i ==1  else word.strip() for i, word in enumerate(line.split())] for line in f.readlines() if line.split()]
+		return tagTupleList
 
-		actorAndOrgListBatch = []
-		actorList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
+	def processBylineInBatch(self, articleBatch):
+		tagTupleList = self.getNERTaggedTupleListFromSentence(' *** '.join([article['byline'] for article in articleBatch]))
+
+		personList, lastTag, wordList  = [], '', []
 		for i in range(len(tagTupleList)):
 			if tagTupleList[i][0] == '***' or i == len(tagTupleList) - 1:
 				#end of one sentence
-				if not actorList and not orgnizationList:
-					actorAndOrgListBatch.append(None)
+				articleBatch[i]['byline_cleaned'] = ', '.join(personList) if personList else ''
+				personList, lastTag, wordList  = [], '', []
+			if tagTupleList[i][1] != lastTag:
+				if lastTag == 'PER':
+					personList.append(' '.join(wordList))
+				wordList = [tagTupleList[i][0]]
+				lastTag = tagTupleList[i][1]
+			else:
+				wordList.append(tagTupleList[i][0])
+
+	def processCiteSentenceInBatch(self, sentenceBatch):
+		tagTupleList = self.getNERTaggedTupleListFromSentence(' *** '.join(sentenceBatch))
+
+		personAndOrgListBatch = []
+		personList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
+		for i in range(len(tagTupleList)):
+			if tagTupleList[i][0] == '***' or i == len(tagTupleList) - 1:
+				#end of one sentence
+				if not personList and not orgnizationList:
+					personAndOrgListBatch.append(None)
 				else:
-					actorAndOrgListBatch.append([', '.join(actorList), ', '.join(orgnizationList)])
-				actorList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
+					personAndOrgListBatch.append([', '.join(personList), ', '.join(orgnizationList)])
+				personList, orgnizationList, inQuoteFlag, lastTag, wordList  = [], [], False, '', []
 
 			if tagTupleList[i][0] == '\"':
 				inQuoteFlag = 1 - inQuoteFlag
@@ -214,14 +248,14 @@ class DataProcessorThread(Thread):
 				if not inQuoteFlag:
 					if tagTupleList[i][1] != lastTag:
 						if lastTag == 'PER':
-							actorList.append(' '.join(wordList))
+							personList.append(' '.join(wordList))
 						elif lastTag == 'ORG':
 							orgnizationList.append(' '.join(wordList))
 						wordList = [tagTupleList[i][0]]
 						lastTag = tagTupleList[i][1]
 					else:
 						wordList.append(tagTupleList[i][0])
-		return actorAndOrgListBatch
+		return personAndOrgListBatch
 
 	def run(self):
 		self._executeFunction()
@@ -267,11 +301,11 @@ class DataExporterMaster():
 	def exportAllCitationBlock(self):
 		#single thread is enough
 		self._threadNumber = 1
-		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engagerWord']
+		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'byline_cleaned', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engager', 'FCEO']
 		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='a')
 		writer.start()
 
-		batchSize = 1000
+		batchSize = 100
 		for i in range(self._threadNumber):
 			t = DataProcessorThread(self._taskQueue, self._resultQueue)
 			t._executeFunction = t.processCitationBlock
