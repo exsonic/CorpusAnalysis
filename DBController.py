@@ -59,6 +59,27 @@ class DBController(object):
 	def getAllCompany(self):
 		return self._db.company.find(timeout=False)
 
+	def getAllBrokerageEffectiveNameList(self):
+		nameList = []
+		orgNameList = ['corp', 'inc', 'securities', 'research', 'bank', 'co', 'llc', 'group', 'l.l.c', 'ltd']
+		orgNameListPatternString = r'|'.join([r'\b' + orgName + r'\b' for orgName in orgNameList])
+		orgNameListPattern = re.compile(orgNameListPatternString, re.IGNORECASE)
+
+		for brokerageDict in self._db.brokerage.find(timeout=False):
+			name = brokerageDict['name']
+			result = orgNameListPattern.search(name)
+			if result is not None:
+				i = result.regs[0][0] - 1
+				if i != -1:
+					while not name[i].isalpha():
+						i -= 1
+					name = name[:i + 1].strip()
+				if len(name.split()) <= 1:
+					name = brokerageDict['name']
+			name = name.replace(r'(', r'\(').replace(r')', r'\)').replace(r'.', r'\.')
+			nameList.append(name)
+		return nameList
+
 	def getAllSentenceWithWord(self, word):
 		return self._db.sentence.find({'content' : re.compile(r'\b' + word + r'\b')}, timeout=False)
 
@@ -108,6 +129,7 @@ class DBController(object):
 			else:
 				pattern = getPatternByKeywordSearchString(searchString)
 				return self._db.article.find({'$or' : [{'byline' : pattern}, {'headline' : pattern}, {'leadParagraph' : pattern}, {'tailParagraph' : pattern}]}, timeout=False)
+
 
 	def getEngagerByName(self, name):
 		return self._db.engager.find_one({'name' : name})
@@ -171,6 +193,9 @@ class DBController(object):
 
 	def saveSentence(self, sentenceDict):
 		self._db.sentence.save(sentenceDict)
+
+	def saveBrokerage(self, brokerageDict):
+		self._db.brokerage.save(brokerageDict)
 
 	#Only for output citation block
 	def getAllCompanyCEODict(self):

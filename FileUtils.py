@@ -248,8 +248,19 @@ def loadEngagerAndCompanyToDB(filePath):
 			engagerDict = {'name' : name, 'lastName' : name, 'type' : ENGAGER_ANALYST}
 			db.insertEngager(engagerDict)
 
+def loadBrokerageToDB(filePath):
+	with open(filePath, 'rU') as f:
+		db = DBController()
+		reader = csv.reader(f)
+		for i, line in enumerate(reader):
+			if i == 0:
+				continue
+			line = [word.strip() for word in line]
+			brokerageDict = {'_id' : line[1], 'name' : line[0], 'code' : line[2]}
+			db.saveBrokerage(brokerageDict)
 
 if __name__ == '__main__':
-	loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
+	# loadAllXMLtoDB('/Users/exsonic/Developer/Marshall_RA/factival_chem/')
 	# loadEngagerAndCompanyToDB('corpus/CEO_company_factival_chem.csv')
 	# loadAllRTFToDB('/Users/exsonic/Developer/Marshall_RA/0.chem_50')
+	loadBrokerageToDB('corpus/brokerage_ids.csv')

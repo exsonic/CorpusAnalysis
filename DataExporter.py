@@ -146,6 +146,12 @@ class DataProcessorThread(Thread):
 
 
 	def processCitationBlock(self):
+		#because list is too long, we need to separate name in to chunk
+		brokerNameList = list(self._db.getAllBrokerageEffectiveNameList())
+		brokerageNamePatternList = []
+		for i in range(0, len(brokerNameList), 500):
+			brokerageNamePatternList.append(re.compile(r'|'.join([r'\b' + name + r'\b' for name in brokerNameList[i : i + 500]]), re.IGNORECASE))
+
 		quotePattern = re.compile(r'\"[^\"]+\"')
 		citeWordPatternStringList = [(r'\b' + citeWord + r'\b') for citeWord in self._citeWordList]
 
@@ -195,12 +201,20 @@ class DataProcessorThread(Thread):
 									FCEO = 1
 						lineListBatch[i] += (actorAndOrgList + [' '.join(engagerNameList)])
 						lineListBatch[i].append(FCEO)
+						unQuotedPart = re.sub(r'"[^"]+"', '', lineListBatch[i][9])
+						findBrokerage = False
+						for pattern in brokerageNamePatternList:
+							result = pattern.search(unQuotedPart)
+							if result is not None and result.string[result.regs[0][0]].isupper():
+								# lineListBatch[i].append(result.string[result.regs[0][0] : result.regs[0][1]])
+								findBrokerage = True
+								break
+						lineListBatch[i].append(1 if findBrokerage else 0)
 						self._resultQueue.put(lineListBatch[i])
 				self._taskQueue.task_done()
 
 	def getNERTaggedTupleListFromSentence(self, sentence):
 		#use senna name entity tagger, it fast!!
-
 		sentence = unicode(sentence).encode('utf-8', 'ignore')
 		with open('temp/input.txt', 'w') as f:
 			f.write(sentence)
@@ -313,7 +327,7 @@ class DataExporterMaster():
 	def exportAllCitationBlock(self):
 		#single thread is enough
 		self._threadNumber = 1
-		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'byline_cleaned', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engager', 'FCEO']
+		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'byline_cleaned', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engager', 'FCEO', 'broker']
 		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='w')
 		writer.start()
 
@@ -334,6 +348,7 @@ class DataExporterMaster():
 					break
 				self._taskQueue.put(articleBatch)
 			self._taskQueue.join()
+			# break
 			print('################')
 			if isDone:
 				break
