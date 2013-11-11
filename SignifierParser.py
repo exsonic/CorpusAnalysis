@@ -18,7 +18,7 @@ class SignifierParser(object):
 		self.negWord = getWordList(WORD_NEG)
 		self.exWord = getWordList(ATRB_EX)
 		self.inWord = getWordList(ATRB_IN)
-		self.citeWord = getWordList(CITE_WORD)
+		self.citeWord = getWordList(WORD_CITE)
 		self.engagerList = list(self.db.getAllEngager())
 		self.companyList = list(self.db.getAllCompany())
 

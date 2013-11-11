@@ -21,9 +21,9 @@ def cleanFiles(inputDir):
 	#rename every file
 	for dirName, _, fileNames in os.walk(inputDir):
 		if len(fileNames) > 0 and not isFileNamesIncludeLetter(fileNames):
-			fileNames = sorted(fileNames, key=lambda fileName : int(fileName.split('.')[0]))
+			fileNames = sorted(fileNames, key=lambda filename : int(filename.split('.')[0]))
 		else:
-			fileNames = sorted(fileNames, key=lambda fileName : fileName.split('.')[0])
+			fileNames = sorted(fileNames, key=lambda filename : filename.split('.')[0])
 		for i, fileName in enumerate(fileNames):
 			oldAbsPath = getAbsPath(dirName, fileName)
 			newAbsPath = getAbsPath(dirName, str(i + 1) + '.xml')
@@ -76,25 +76,6 @@ def getArticleFilePath(articleDict):
 		return articleDict['companyFolder'] + '/' + articleDict['subFolder']
 	else:
 		return articleDict['companyFolder']
-
-def parseSentenceFromAtrbFile(dirName, fileName):
-	articleId = fileName.split('_')[0]
-	atrbType = getAtrbTypeKeyFromFolderName(dirName.split('/')[-1])
-	fileAbsPath = getAbsPath(dirName, fileName)
-	with open(fileAbsPath) as f:
-		content = f.readline().strip().encode('utf-8')
-	sentenceDict = {'articleId' : articleId, 'content' : content, 'atrb' : atrbType}
-	return sentenceDict
-
-def getAtrbTypeKeyFromFolderName(folderName):
-	if folderName == 'External':
-		return ATRB_EX
-	elif folderName == 'Internal':
-		return ATRB_IN
-	elif folderName == 'None':
-		return ATRB_NO
-	else:
-		raise Exception('invalid folderName')
 
 def parseArticleFromXML(fileDir):
 	try:
@@ -206,18 +187,6 @@ def loadAllRTFToDB(folderPath):
 
 ##########################################################################################################################
 
-def loadAtrbSentenceToDB(inputDir):
-	"""
-	Load all the annotated internal/external sentences to DB
-	"""
-	db = DBController()
-	for dirName, _, fileNames in os.walk(inputDir):
-		for fileName in fileNames:
-			try:
-				sentenceDict = parseSentenceFromAtrbFile(dirName, fileName)
-				db.insertAnnotatedSentence(sentenceDict)
-			except Exception as e:
-				print e, dirName, fileName
 
 def loadEngagerAndCompanyToDB(filePath):
 	with open(filePath, 'rU') as f:

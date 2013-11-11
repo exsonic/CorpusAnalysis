@@ -208,6 +208,9 @@ class DBController(object):
 	def setArticleProcessed(self, articleId):
 		self._db.article.update({'_id' : articleId}, {'$set' : {'processed' : True}})
 
-	def getAllUnprocessedArticle(self, limit=0):
+	def setAllArticleUnprocessed(self):
+		self._db.article.update({}, {'$set' : {'processed' : False}}, upsert=True, multi=True)
+
+	def getUnprocessedArticleInBatch(self, limit=0):
 		return self._db.article.find({'processed' : False}, timeout=False).limit(limit)
 

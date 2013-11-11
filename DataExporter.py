@@ -19,7 +19,7 @@ class DataProcessorThread(Thread):
 		self._executeFunction = None
 
 		self._db = DBController()
-		self._citeWordList = getWordList(CITE_WORD)
+		self._citeWordList = getWordList(WORD_CITE)
 		if not os.path.exists('export/'):
 			os.makedirs('export/')
 
@@ -144,7 +144,6 @@ class DataProcessorThread(Thread):
 				lineList = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'].strip(), article['byline'].strip(), article['headline'].strip(), '\t'.join(articleSentenceList)]
 				self._resultQueue.put(lineList)
 
-
 	def processCitationBlock(self):
 		#because list is too long, we need to separate name in to chunk
 		brokerNameList = list(self._db.getAllBrokerageEffectiveNameList())
@@ -159,6 +158,8 @@ class DataProcessorThread(Thread):
 		engagerNamePattern = re.compile(r'|'.join(['CEO', 'analyst', 'executive']), re.IGNORECASE)
 		citeWordPattern = re.compile(r'|'.join(citeWordPatternStringList), re.IGNORECASE)
 
+		wordMatchPatternList = [getWordRegexPattern(WORD_CAUSE_IN), getWordRegexPattern(WORD_CAUSE_EX), getWordRegexPattern(WORD_CONTROL_LOW), getWordRegexPattern(WORD_CONTROL_HIGH), getWordRegexPattern(MCD_POS), getWordRegexPattern(MCD_NEG), getWordRegexPattern(MCD_UNCERTAIN)]
+		filterWordDict = getWordDict(WORD_FILTER)
 		while True:
 			#process in batch
 			articleBatch = self._taskQueue.get()
@@ -168,6 +169,7 @@ class DataProcessorThread(Thread):
 			else:
 				lineListBatch = []
 				toProcessSentenceBatch = []
+				sentenceTextIndex, NERStartIndex, NERPartCount, wordMatchStartIndex = 9, 12, 5, 18
 				#add byline_cleaned in articleDict
 				self.processBylineInBatch(articleBatch)
 				for article in articleBatch:
@@ -179,37 +181,48 @@ class DataProcessorThread(Thread):
 					articleLineListPart = [articleCompanyCode, articleCompanyName, article['filePath'], article['_id'], article['date'], article['sourceName'].strip(), article['byline'].strip(), article['byline_cleaned'], article['headline'].strip()]
 
 					for paragraph in [article['leadParagraph'], article['tailParagraph']]:
+						#if found qouted part in this paragraph
 						quotedStringList = re.findall(quotePattern, paragraph)
 						if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5:
+							#Among all the quoted parts, the max word count MUST bigger than 5
+							#If so, then get all sentences
 							sentenceList = sent_tokenize(paragraph)
 							for sentence in sentenceList:
 								quotedStringList = re.findall(quotePattern, sentence)
 								citeWordList = re.findall(citeWordPattern, sentence)
+								#If this sentence has quotation and quoted part word cout is bigger than 5 and has cite word
+								#Then parse it add to the export
 								if quotedStringList and max([len(string.split()) for string in quotedStringList]) > 5 and citeWordList:
-									lineList = articleLineListPart + [sentence, '. '.join(quotedStringList), ', '.join(citeWordList)]
+									lineList = articleLineListPart + [sentence, '. '.join(quotedStringList), ', '.join(citeWordList)] + [''] * NERPartCount + [len(sentence.split())] + [''] * len(wordMatchPatternList) * 2
+									# Macth the keyword in dictionary
+									for i, pattern in enumerate(wordMatchPatternList):
+										matchedWordList = getMatchWordListFromPattern(sentence, pattern, filterWordDict)
+										lineList[i + wordMatchStartIndex] = len(matchedWordList)
+										lineList[i + len(wordMatchPatternList) + wordMatchStartIndex] = ', '.join(matchedWordList)
 									lineListBatch.append(lineList)
 									toProcessSentenceBatch.append(sentence)
 				actorAndOrgListBatch = self.processCiteSentenceInBatch(toProcessSentenceBatch)
 				for i, actorAndOrgList in enumerate(actorAndOrgListBatch):
 					if actorAndOrgList is not None:
-						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][9])
+						engagerNameList = re.findall(engagerNamePattern, lineListBatch[i][sentenceTextIndex])
 						FCEO = 0
 						articleCompanyCode = lineListBatch[i][0]
 						for name in actorAndOrgList[0].split(', '):
 							for namePart in name.split():
 								if articleCompanyCode in companyCEODict and companyCEODict[articleCompanyCode].find(namePart) != -1:
 									FCEO = 1
-						lineListBatch[i] += (actorAndOrgList + [' '.join(engagerNameList)])
-						lineListBatch[i].append(FCEO)
-						unQuotedPart = re.sub(r'"[^"]+"', '', lineListBatch[i][9])
+						lineListBatch[i][NERStartIndex] = actorAndOrgList[0]
+						lineListBatch[i][NERStartIndex + 1] = actorAndOrgList[1]
+						lineListBatch[i][NERStartIndex + 2] = ' '.join(engagerNameList)
+						lineListBatch[i][NERStartIndex + 3] = FCEO
+						unQuotedPart = re.sub(r'"[^"]+"', '', lineListBatch[i][sentenceTextIndex])
 						findBrokerage = False
 						for pattern in brokerageNamePatternList:
 							result = pattern.search(unQuotedPart)
 							if result is not None and result.string[result.regs[0][0]].isupper():
-								# lineListBatch[i].append(result.string[result.regs[0][0] : result.regs[0][1]])
 								findBrokerage = True
 								break
-						lineListBatch[i].append(1 if findBrokerage else 0)
+						lineListBatch[i][NERStartIndex + 4] = 1 if findBrokerage else 0
 						self._resultQueue.put(lineListBatch[i])
 				self._taskQueue.task_done()
 
@@ -320,14 +333,17 @@ class DataExporterMaster():
 		self._resultQueue = Queue()
 		self._taskQueue = Queue()
 		self._db = DBController()
-		self._threadNumber = 4
+		self._threadNumber = 1
 		self._threadList = []
 
 
 	def exportAllCitationBlock(self):
 		#single thread is enough
-		self._threadNumber = 1
 		attributeList = ['cotic', 'coname', 'filePath', 'accessNo', 'date', 'source', 'byline', 'byline_cleaned', 'headline', 'sentence', 'cite_content', 'cite_word', 'actor', 'organization', 'engager', 'FCEO', 'broker']
+		attributeList += ['total_word_count', 'cau_int', 'cau_ext', 'cont_l', 'cont_h', 'pos', 'neg', 'uncert']
+		attributeList += ['cau_int_words', 'cau_ext_words', 'cont_l_words', 'cont_h_words', 'pos_words', 'neg_words', 'uncert_words']
+		#Comment this line if you wanna continue last time work and set the write mode to append 'a'
+		self._db.setAllArticleUnprocessed()
 		writer = CSVWriterThread(self._resultQueue, 'export/allCitationSentence.csv', attributeList, mode='w')
 		writer.start()
 
@@ -342,13 +358,12 @@ class DataExporterMaster():
 		while True:
 			isDone = False
 			for i in range(self._threadNumber):
-				articleBatch = list(self._db.getAllUnprocessedArticle(batchSize))
+				articleBatch = list(self._db.getUnprocessedArticleInBatch(batchSize))
 				if articleBatch is None or not articleBatch:
 					isDone = True
 					break
 				self._taskQueue.put(articleBatch)
 			self._taskQueue.join()
-			# break
 			print('################')
 			if isDone:
 				break

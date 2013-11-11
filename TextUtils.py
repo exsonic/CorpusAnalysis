@@ -3,15 +3,11 @@ Created on 2013-5-8
 @author: Bobi Pu, bobi.pu@usc.edu
 """
 import re
-
 from Settings import *
-from nltk.tokenize import word_tokenize
 from nltk.stem.wordnet import WordNetLemmatizer
-from math import log10
-from collections import Counter
-from copy import deepcopy
 from re import findall
 import itertools
+
 
 def isValidSentence(string):
 		if string.find('=') != -1:
@@ -24,7 +20,7 @@ def isValidSentence(string):
 			return False
 		elif getWordFrequencyInString(string, '-') > PFM_SENTENCE_HYPHEN_LIMIT:
 			return False
-		elif isStringContainWordInList(string, getWordList(FILTER_PFM)):
+		elif isStringContainWordInList(string, getWordList(WORD_INVALID_SENTENCE_FILTER)):
 			return False
 		else:
 			return True
@@ -41,30 +37,27 @@ def isStringContainWordInList(string, wordList):
 			return True
 	return False
 
-def isASCII(string):
-	try:
-		string.decode('ascii')
-		return True
-	except:
-		return False
-
 def getWordListFilePath(wordType):
-	if wordType == WORD_POS:
-		return 'word/posWord.txt'
-	elif wordType == WORD_NEG:
-		return 'word/negWord.txt'
-	elif wordType == WORD_PFM:
-		return 'word/pfmWord.txt'
-	elif wordType == ATRB_EX:
-		return 'word/exWord.txt'
-	elif wordType == ATRB_IN:
-		return 'word/inWord.txt'
-	elif wordType == FILTER_WORD:
-		return 'word/filterWord.txt'
-	elif wordType == FILTER_PFM:
-		return 'word/pfmFilterWord.txt'
-	elif wordType == CITE_WORD:
-		return 'word/citeWord.txt'
+	if wordType == WORD_INVALID_SENTENCE_FILTER:
+		return 'word/validSentenceFilterWord.csv'
+	elif wordType == WORD_FILTER:
+		return 'word/filterWord.csv'
+	elif wordType == WORD_CITE:
+		return 'word/citeWord.csv'
+	elif wordType == WORD_CAUSE_EX:
+		return 'word/causality_ext.csv'
+	elif wordType == WORD_CAUSE_IN:
+		return 'word/causality_int.csv'
+	elif wordType == WORD_CONTROL_LOW:
+		return 'word/controlability_low.csv'
+	elif wordType == WORD_CONTROL_HIGH:
+		return 'word/controlability_high.csv'
+	elif wordType == MCD_POS:
+		return 'word/LoughranMcDonald_Positive.csv'
+	elif wordType == MCD_NEG:
+		return 'word/LoughranMcDonald_Negative.csv'
+	elif wordType == MCD_UNCERTAIN:
+		return 'word/LoughranMcDonald_Uncertainty.csv'
 
 def getWordList(wordType):
 	with open(getWordListFilePath(wordType)) as f:
@@ -77,104 +70,52 @@ def getWordDict(wordType):
 	wordList = getWordList(wordType)
 	return getWordDictWithWordList(wordList)
 
-def countWord(wordList, wordDict):
-	for word in wordList:
-		wordDict[word] += 1
-	return wordDict
+def lemmatize(word):
+	lemmatizedWord = lemmatizer.lemmatize(word, NOUN)
+	if lemmatizedWord != word:
+		return lemmatizedWord
+	lemmatizedWord = lemmatizer.lemmatize(word, VERB)
+	if lemmatizedWord != word:
+		return lemmatizedWord
+	lemmatizedWord = lemmatizer.lemmatize(word, ADJ)
+	if lemmatizedWord != word:
+		return lemmatizedWord
+	return lemmatizer.lemmatize(word, ADV)
 
-def getWordCountList(wordList, wordDict):
-	wordCountList = []
-	for word in wordList:
-		wordCountList.append(wordDict[word])
-	return wordCountList
 
-def getKeyFromWordType(wordType):
-	if wordType == WORD_POS:
-		return 'pos'
-	elif wordType == WORD_NEG:
-		return 'neg'
-	elif wordType == WORD_PFM:
-		return 'pfm'
-	elif wordType == ATRB_NO:
-		return 'no'
-	elif wordType == ATRB_IN:
-		return 'in'
-	elif wordType == ATRB_EX:
-		return 'ex'
-	elif wordType == CITE_WORD:
-		return 'cite'
+def sentenceToWordList(sentence, filterWordDict=None):
+	#use this to extract keyword
+	if filterWordDict is not None:
+		wordList = [lemmatize(word.lower().strip()) for word in sentence.split() if unicode.isalnum(word)]
+		return [word for word in wordList if word not in filterWordDict]
 	else:
-		raise Exception('invalid wordType value')
+		return [lemmatize(word.lower().strip()) for word in sentence.split() if unicode.isalnum(word)]
 
-def getLemmatizer():
-	if 'lemmatizer' not in globals():
-		global lemmatizer
-		lemmatizer = WordNetLemmatizer()
-		return lemmatizer
-	else:
-		return lemmatizer
+def getWordRegexPattern(wordType):
+	#check the word is unigram or bigram, then use different pattern paradigm
+	wordList = getWordList(wordType)
+	wordPatternStringList = []
+	for wordString in wordList:
+		#patternString = r'\b' + (wordString.split()[0] + r'( [\w\d]+)* ') + wordString.split()[1] + r'\b'
+		wordPatternString = wordString if 1 == len(wordString.split()) else ' '.join(wordString.split())
+		wordPatternString = r'\b' + wordPatternString + r'\b'
+		wordPatternStringList.append(wordPatternString)
+	patternString = r'|'.join(wordPatternStringList)
+	pattern = re.compile(patternString, re.IGNORECASE)
+	return pattern
 
-def getProcessedWordList(string, lemmatizeType=NOUN, isFilterWord=True):
-	if 'lemmatizer' not in globals():
-		global lemmatizer
-		lemmatizer = WordNetLemmatizer()
-	if 'filterWordDict' not in globals():
-		global filterWordDict
-		filterWordDict = getWordDict(FILTER_WORD)
 
-	wordList = []
-	for word in word_tokenize(string):
-		word = lemmatizer.lemmatize(word.strip().lower(), lemmatizeType)
-		if word.isalpha() and (not (isFilterWord and word in filterWordDict)) and len(word) > 1:
-			wordList.append(word)
-	return wordList
-
-def getProcessedSentenceList(sentences, lemmatizeType=NOUN):
-	return [' '.join(getProcessedWordList(sentence['content'], lemmatizeType)) for sentence in sentences]
-
-def getTFIDFMatrix(sentences, wordTable):
-	matrix = []
-	sentences_2 = deepcopy(sentences)
-	totalSentenceNumber = sentences.count()
-	sentenceCountWithWordList = [0] * len(wordTable)
-	for sentence in sentences:
-		wordList, sentenceWordTable = getProcessedWordList(sentence['content']), {}
-		for word in wordList:
-			if word not in sentenceWordTable:
-				sentenceCountWithWordList[wordTable[word]] += 1
-				sentenceWordTable[word] = True
-	for sentence in sentences_2:
-		wordList, TFIDFList = getProcessedWordList(sentence['content']), [0] * len(wordTable)
-		wordCountDict = Counter(wordList)
-		for word in wordList:
-			TFIDFList[wordTable[word]] = computTFIDF(wordCountDict[word], len(wordList), totalSentenceNumber, sentenceCountWithWordList[wordTable[word]])
-		matrix.append(TFIDFList)
-	return matrix
-
-def computTFIDF(wordCountInSentence, sentenceWordNum, sentenceNum, sentenceNumberWithWord):
-	tf = float(wordCountInSentence) / sentenceWordNum
-	idf = log10(float(sentenceNum) / (sentenceNumberWithWord + 1))
-	return tf * idf
-
-def sumMatchingElememt(matrix):
-	outputList = []
-	for i in range(len(matrix[0])):
-		outputList.append(sum([vector[i] for vector in matrix]))
-	return outputList
-
-def getAtrbWordList():
-	return  getWordList(ATRB_IN) + getWordList(ATRB_EX)
-
-def getAtrbWordDict():
-	atrbWordList = getAtrbWordList()
-	return dict(zip(atrbWordList, [0] * len(atrbWordList)))
+def getMatchWordListFromPattern(text, pattern, filterWordDict):
+	#filter and lemmatize the input text
+	text = ' '.join(sentenceToWordList(text, filterWordDict))
+	return pattern.findall(text)
 
 def getQuotedString(string):
 	matches = findall(r'"(.+?)"',string)
 	return ', '.join(matches)
 
 def getStringSurroundWordInDistance(string, word, distance):
-	wordList = getProcessedWordList(string, NOUN)
+	wordList = sentenceToWordList(string, defaulFilterWordDict)
 	outputString = ''
 	try:
 		wordIndex = wordList.index(word)
@@ -203,3 +144,6 @@ def getPatternByKeywordSearchString(searchString):
 			regexString = r'\b' + searchString + r'\b'
 
 		return re.compile(regexString, re.IGNORECASE)
+
+lemmatizer = WordNetLemmatizer()
+defaulFilterWordDict = getWordDict(WORD_FILTER)
